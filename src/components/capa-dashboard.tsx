@@ -20,11 +20,12 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { summarizeCapas } from '@/ai/flows/summarize-capas-flow';
 
 const EXPECTED_HEADERS = ['CAPA ID', 'Tittle', 'Due Date', 'Deadline for effectiveness check', 'Assigned To', 'Pending Steps'];
-const DATE_FORMATS = ['M/d/yyyy', 'MM/dd/yyyy', 'M-d-yyyy', 'MM-dd-yyyy'];
+const DATE_FORMATS = ['M/d/yyyy', 'MM/dd/yyyy', 'M-d-yyyy', 'MM-dd-yyyy', 'dd.MM.yyyy'];
 
 const parseDate = (dateString: string): Date => {
+  if (!dateString) return new Date('invalid');
   for (const format of DATE_FORMATS) {
-    const parsedDate = parse(dateString, format, new Date());
+    const parsedDate = parse(dateString.trim(), format, new Date());
     if (isValid(parsedDate)) {
       return parsedDate;
     }
@@ -85,18 +86,18 @@ export default function CapaDashboard() {
       
       try {
         const rows = text.split(/\r?\n/).filter(row => row.trim() !== '');
-        const header = rows[0].split(',').map(h => h.trim());
+        const header = rows[0].split('\t').map(h => h.trim());
   
         const missingHeaders = EXPECTED_HEADERS.filter(h => !header.includes(h));
         if (missingHeaders.length > 0) {
-          throw new Error(`CSV is missing required columns: ${missingHeaders.join(', ')}`);
+          throw new Error(`File is missing required columns: ${missingHeaders.join(', ')}`);
         }
   
         const data: CapaData[] = rows.slice(1).map(row => {
-          const values = row.split(',');
+          const values = row.split('\t');
           const entry: CapaData = {} as CapaData;
           header.forEach((h, i) => {
-            (entry as any)[h] = values[i];
+            (entry as any)[h] = values[i]?.trim() || '';
           });
           return entry;
         });
@@ -113,7 +114,7 @@ export default function CapaDashboard() {
         }
         toast({
           variant: "destructive",
-          title: "CSV Parsing Error",
+          title: "File Parsing Error",
           description: errorMessage,
         });
         setCapaData([]);
@@ -218,7 +219,7 @@ export default function CapaDashboard() {
             <KpiCard title="Total CAPAs" value={kpiValues.totalCount} icon={ListTodo} description={dateRange?.from ? "In selected date range" : "From imported file"}/>
             <KpiCard title="Overdue CAPAs" value={kpiValues.overdueCount} icon={AlertTriangle} description={`${(kpiValues.totalCount > 0 ? (kpiValues.overdueCount / kpiValues.totalCount * 100).toFixed(1) : 0)}% of total`}/>
             <KpiCard title="On Time Rate" value={`${kpiValues.onTimePercentage}%`} icon={CheckCircle} description="CAPAs completed on schedule" />
-            <KpiCard title="Unique Assignees" value={Object.keys(chartDataByAssignee).length} icon={Users} description="People with assigned CAPAs"/>
+            <KpiCard title="Unique Assignees" value={Object.keys(chartDataByAssignee.reduce((acc, item) => { if(item.name) acc[item.name] = true; return acc; }, {} as Record<string, boolean>)).length} icon={Users} description="People with assigned CAPAs"/>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-5">
@@ -261,7 +262,7 @@ export default function CapaDashboard() {
     <div className="flex flex-col items-center justify-center text-center py-20 px-4 rounded-lg border-2 border-dashed border-muted-foreground/30">
         <FileUp className="h-16 w-16 text-muted-foreground mb-4"/>
         <h2 className="text-2xl font-semibold mb-2">Upload Your CAPA Data</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">Click the "Choose file" button to upload a .csv file and start visualizing your Corrective and Preventive Actions.</p>
+        <p className="text-muted-foreground mb-6 max-w-md">Click the "Choose file" button to upload a .csv or .tsv file and start visualizing your Corrective and Preventive Actions.</p>
     </div>
   );
 
@@ -272,7 +273,7 @@ export default function CapaDashboard() {
         <div className="ml-auto flex items-center gap-2 sm:gap-4">
             <div className='flex items-center gap-2'>
                 <Label htmlFor="capa-csv" className="sr-only">Upload CSV</Label>
-                <Input id="capa-csv" type="file" accept=".csv" onChange={handleFileUpload} className="w-full max-w-[150px] sm:max-w-xs text-sm file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
+                <Input id="capa-csv" type="file" accept=".csv,.tsv,.txt" onChange={handleFileUpload} className="w-full max-w-[150px] sm:max-w-xs text-sm file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
             </div>
             
             <Button
@@ -352,3 +353,5 @@ export default function CapaDashboard() {
     </div>
   );
 }
+
+    

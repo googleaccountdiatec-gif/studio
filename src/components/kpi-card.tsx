@@ -16,7 +16,7 @@ export function KpiCard({ title, value, icon: Icon, description }: KpiCardProps)
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold text-primary">{value}</div>
+        <div className="text-2xl font-bold text-primary">{String(value)}</div>
         {description && (
           <p className="text-xs text-muted-foreground">{description}</p>
         )}
@@ -24,3 +24,5 @@ export function KpiCard({ title, value, icon: Icon, description }: KpiCardProps)
     </Card>
   );
 }
+
+    
