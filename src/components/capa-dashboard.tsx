@@ -86,7 +86,7 @@ export default function CapaDashboard() {
       
       try {
         const rows = text.split(/\r?\n/).filter(row => row.trim() !== '');
-        const header = rows[0].split('\t').map(h => h.trim());
+        const header = rows[0].split('\t').map(h => h.trim().replace(/[\uFEFF]/g, ''));
   
         const missingHeaders = EXPECTED_HEADERS.filter(h => !header.includes(h));
         if (missingHeaders.length > 0) {
@@ -353,5 +353,3 @@ export default function CapaDashboard() {
     </div>
   );
 }
-
-    
