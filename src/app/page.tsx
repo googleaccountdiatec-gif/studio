@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import CapaDashboard from '@/components/capa-dashboard';
 import ChangeActionDashboard from "@/components/change-action-dashboard";
 import NonConformanceDashboard from "@/components/non-conformance-dashboard";
+import SettingsPage from "@/components/settings-page";
 
 export default function Home() {
   return (
@@ -19,6 +20,7 @@ export default function Home() {
               <TabsTrigger value="capa">CAPA</TabsTrigger>
               <TabsTrigger value="change-action">Change Action</TabsTrigger>
               <TabsTrigger value="non-conformance">Non-conformance</TabsTrigger>
+              <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
 
             <TabsContent value="capa">
@@ -29,6 +31,9 @@ export default function Home() {
             </TabsContent>
             <TabsContent value="non-conformance">
                <NonConformanceDashboard />
+            </TabsContent>
+            <TabsContent value="settings">
+              <SettingsPage />
             </TabsContent>
           </Tabs>
         </main>

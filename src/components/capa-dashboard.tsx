@@ -24,6 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { summarizeCapas } from '@/ai/flows/summarize-capas-flow';
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
+import { getProductionTeam } from '@/lib/teams';
 
 const EXPECTED_HEADERS = ['CAPA ID', 'Title', 'Due Date', 'Deadline for effectiveness check', 'Assigned To', 'Pending Steps'];
 const DATE_FORMATS = ['M/d/yyyy', 'MM/dd/yyyy', 'M-d-yyyy', 'MM-dd-yyyy', 'dd.MM.yyyy'];
@@ -96,9 +97,11 @@ export default function CapaDashboard() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [phaseFilter, setPhaseFilter] = useState<'all' | 'execution' | 'effectiveness'>('all');
+  const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const [selectedAssignee, setSelectedAssignee] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const { toast } = useToast();
+  const productionTeam = getProductionTeam();
 
   const [columnVisibility, setColumnVisibility] = useState({
     'Title': true,
@@ -205,6 +208,10 @@ export default function CapaDashboard() {
         return phaseFilter === 'effectiveness' ? isEffectiveness : !isEffectiveness;
       });
     }
+    
+    if (teamFilter === 'production') {
+      baseData = baseData.filter(item => productionTeam.includes(item['Assigned To']));
+    }
 
     return baseData.map(item => {
       const isEffectivenessStep = item['Pending Steps']?.toLowerCase().includes('effectiveness');
@@ -219,7 +226,7 @@ export default function CapaDashboard() {
       
       return { ...item, isOverdue, effectiveDueDate };
     });
-  }, [capaData, showCompleted, phaseFilter]);
+  }, [capaData, showCompleted, phaseFilter, teamFilter, productionTeam]);
 
   const filteredData = useMemo(() => {
     if (!dateRange?.from) {
@@ -393,11 +400,12 @@ export default function CapaDashboard() {
 
   return (
     <div className="flex flex-col">
-       <div className="flex items-center gap-4 sm:gap-6">
-            <RadioGroup defaultValue="all" onValueChange={(value) => setPhaseFilter(value as any)} className="flex items-center gap-4">
+       <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
+            <RadioGroup value={phaseFilter} onValueChange={(value) => setPhaseFilter(value as any)} className="flex items-center gap-4">
+                <Label>Phase:</Label>
                 <div className="flex items-center space-x-2">
                     <RadioGroupItem value="all" id="r1" />
-                    <Label htmlFor="r1">All Phases</Label>
+                    <Label htmlFor="r1">All</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                     <RadioGroupItem value="execution" id="r2" />
@@ -406,6 +414,18 @@ export default function CapaDashboard() {
                 <div className="flex items-center space-x-2">
                     <RadioGroupItem value="effectiveness" id="r3" />
                     <Label htmlFor="r3">Effectiveness</Label>
+                </div>
+            </RadioGroup>
+            
+            <RadioGroup value={teamFilter} onValueChange={(value) => setTeamFilter(value as any)} className="flex items-center gap-4">
+                <Label>Team:</Label>
+                <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="all" id="t1" />
+                    <Label htmlFor="t1">All Operators</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="production" id="t2" />
+                    <Label htmlFor="t2">Production Only</Label>
                 </div>
             </RadioGroup>
 

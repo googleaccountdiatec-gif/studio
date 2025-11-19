@@ -15,6 +15,8 @@ import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { getProductionTeam } from '@/lib/teams';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 // Define the expected headers for the Change Action CSV
 const EXPECTED_HEADERS = [
@@ -111,8 +113,10 @@ export default function ChangeActionDashboard() {
   const [changeActionData, setChangeActionData] = useState<ChangeActionData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
   const { toast } = useToast();
+  const productionTeam = getProductionTeam();
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -188,10 +192,16 @@ export default function ChangeActionDashboard() {
 
 
   const processedData = useMemo(() => {
-    return showCompleted 
+    let baseData = showCompleted 
       ? allDataWithDates 
       : allDataWithDates.filter(item => item['Pending Steps'] && item['Pending Steps'].trim() !== '');
-  }, [allDataWithDates, showCompleted]);
+
+    if (teamFilter === 'production') {
+        baseData = baseData.filter(item => productionTeam.includes(item['Responsible']));
+    }
+    
+    return baseData;
+  }, [allDataWithDates, showCompleted, teamFilter, productionTeam]);
 
   const kpiValues = useMemo(() => {
     const totalCount = processedData.length;
@@ -319,7 +329,7 @@ export default function ChangeActionDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <div className="flex items-center gap-2">
             <Switch 
                 id="show-completed-ca" 
@@ -328,8 +338,21 @@ export default function ChangeActionDashboard() {
             />
             <Label htmlFor="show-completed-ca">Show Completed</Label>
         </div>
-        <Label htmlFor="ca-csv" className="sr-only">Upload CSV</Label>
-        <Input id="ca-csv" type="file" accept=".csv,.tsv,.txt" onChange={handleFileUpload} className="max-w-xs" />
+         <RadioGroup value={teamFilter} onValueChange={(value) => setTeamFilter(value as any)} className="flex items-center gap-4">
+            <Label>Team:</Label>
+            <div className="flex items-center space-x-2">
+                <RadioGroupItem value="all" id="t1-ca" />
+                <Label htmlFor="t1-ca">All Operators</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+                <RadioGroupItem value="production" id="t2-ca" />
+                <Label htmlFor="t2-ca">Production Only</Label>
+            </div>
+        </RadioGroup>
+        <div className='flex items-center gap-2 ml-auto'>
+            <Label htmlFor="ca-csv" className="sr-only">Upload CSV</Label>
+            <Input id="ca-csv" type="file" accept=".csv,.tsv,.txt" onChange={handleFileUpload} className="w-full max-w-[150px] sm:max-w-xs text-sm file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
+        </div>
       </div>
       {isLoading ? <LoadingState /> : (changeActionData.length > 0 ? <MainContent /> : <EmptyState />)}
 
