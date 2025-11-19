@@ -6,13 +6,17 @@ import { getProductionTeam, setProductionTeam } from '@/lib/teams';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { XIcon, PlusIcon } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { XIcon, PlusIcon, Palette } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from 'next-themes';
+import { cn } from '@/lib/utils';
 
 export default function SettingsPage() {
   const [team, setTeam] = useState<string[]>([]);
   const [newMember, setNewMember] = useState('');
   const { toast } = useToast();
+  const { setTheme, theme } = useTheme();
 
   useEffect(() => {
     setTeam(getProductionTeam());
@@ -52,13 +56,46 @@ export default function SettingsPage() {
       handleAddMember();
     }
   };
+  
+  const themes = [
+    { name: 'light', colors: ['#ECEFF1', '#3F51B5', '#FFAB40'] },
+    { name: 'dark', colors: ['#111827', '#60A5FA', '#FBBF24'] },
+    { name: 'rose', colors: ['#FFF1F2', '#F43F5E', '#FB923C'] },
+    { name: 'slate', colors: ['#0F172A', '#64748B', '#FBBF24'] },
+  ];
 
   return (
     <div className="space-y-6">
+       <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Palette className="h-6 w-6" />
+                    Appearance
+                </CardTitle>
+                <CardDescription>Customize the look and feel of your dashboard.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-2">
+                    <Label>Color Theme</Label>
+                    <div className="flex gap-4">
+                        {themes.map((t) => (
+                            <div key={t.name} onClick={() => setTheme(t.name)} className={cn("cursor-pointer rounded-md border-2 p-1", theme === t.name && "border-primary")}>
+                                <div className="flex gap-1">
+                                    {t.colors.map(color => (
+                                        <div key={color} style={{ backgroundColor: color }} className="h-8 w-8 rounded-sm"/>
+                                    ))}
+                                </div>
+                                <p className="text-sm text-center pt-1 capitalize">{t.name}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
         <Card>
             <CardHeader>
-                <CardTitle>Settings</CardTitle>
-                <CardDescription>Manage your application settings and configurations.</CardDescription>
+                <CardTitle>Team Management</CardTitle>
+                <CardDescription>Manage your production team members.</CardDescription>
             </CardHeader>
             <CardContent>
                 <div className="space-y-4">
