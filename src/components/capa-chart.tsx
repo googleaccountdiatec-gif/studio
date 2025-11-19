@@ -20,9 +20,10 @@ interface CapaChartProps {
   data: { name: string; [key: string]: any }[];
   title: string;
   dataKey: string;
+  onBarClick?: (name: string) => void;
 }
 
-export function CapaChart({ data, title, dataKey }: CapaChartProps) {
+export function CapaChart({ data, title, dataKey, onBarClick }: CapaChartProps) {
   const chartConfig = {
     [dataKey]: {
       label: dataKey.charAt(0).toUpperCase() + dataKey.slice(1),
@@ -38,7 +39,11 @@ export function CapaChart({ data, title, dataKey }: CapaChartProps) {
       <CardContent>
         <ChartContainer config={chartConfig} className="h-[350px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart accessibilityLayer data={data}>
+            <BarChart 
+              accessibilityLayer 
+              data={data}
+              onClick={(e) => e && onBarClick && onBarClick(e.activeLabel as string)}
+            >
               <XAxis
                 dataKey="name"
                 stroke="hsl(var(--foreground))"
@@ -62,6 +67,7 @@ export function CapaChart({ data, title, dataKey }: CapaChartProps) {
                 dataKey={dataKey}
                 fill={`var(--color-${dataKey})`}
                 radius={[4, 4, 0, 0]}
+                cursor={onBarClick ? "pointer" : "default"}
               />
             </BarChart>
           </ResponsiveContainer>

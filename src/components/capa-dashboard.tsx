@@ -18,7 +18,9 @@ import { CapaChart } from './capa-chart';
 import { Skeleton } from './ui/skeleton';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { summarizeCapas } from '@/ai/flows/summarize-capas-flow';
 
 const EXPECTED_HEADERS = ['CAPA ID', 'Title', 'Due Date', 'Deadline for effectiveness check', 'Assigned To', 'Pending Steps'];
@@ -92,6 +94,7 @@ export default function CapaDashboard() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [phaseFilter, setPhaseFilter] = useState<'all' | 'execution' | 'effectiveness'>('all');
+  const [selectedAssignee, setSelectedAssignee] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -260,6 +263,11 @@ export default function CapaDashboard() {
       .sort((a, b) => b.total - a.total)
       .slice(0, 10); // Show top 10 assignees
   }, [filteredData]);
+
+  const assigneeCapas = useMemo(() => {
+    if (!selectedAssignee) return [];
+    return filteredData.filter(item => item['Assigned To'] === selectedAssignee);
+  }, [filteredData, selectedAssignee]);
   
   const MainContent = () => (
     <>
@@ -296,7 +304,12 @@ export default function CapaDashboard() {
 
         <div className="grid gap-4 lg:grid-cols-5">
             <div className="lg:col-span-3">
-                <CapaChart data={chartDataByAssignee} title="CAPAs by Assignee (Top 10)" dataKey="total" />
+                <CapaChart 
+                    data={chartDataByAssignee} 
+                    title="CAPAs by Assignee (Top 10)" 
+                    dataKey="total" 
+                    onBarClick={setSelectedAssignee}
+                />
             </div>
             <div className="lg:col-span-2">
                 <CapaChart data={chartDataByStatus} title="CAPA Status Overview" dataKey="status" />
@@ -446,6 +459,34 @@ export default function CapaDashboard() {
       <main className="flex-1 p-4 sm:p-6 space-y-6">
         {isLoading ? <LoadingState /> : (capaData.length > 0 ? <MainContent /> : <EmptyState />)}
       </main>
+
+      <Dialog open={!!selectedAssignee} onOpenChange={(open) => !open && setSelectedAssignee(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>CAPAs Assigned to {selectedAssignee}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>CAPA ID</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Due Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {assigneeCapas.map((capa) => (
+                  <TableRow key={capa['CAPA ID']}>
+                    <TableCell>{capa['CAPA ID']}</TableCell>
+                    <TableCell>{capa['Title']}</TableCell>
+                    <TableCell>{isValid(capa.effectiveDueDate) ? format(capa.effectiveDueDate, 'PPP') : 'Invalid Date'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
