@@ -13,7 +13,7 @@ import { format, isAfter, parse, isValid, startOfDay } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import type { CapaData } from '@/lib/types';
 import { KpiCard } from './kpi-card';
-import { CapaDataTable } from './capa-data-table';
+import { DataTable, DataTableColumn } from './data-table';
 import { CapaChart } from './capa-chart';
 import { Skeleton } from './ui/skeleton';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -22,6 +22,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { summarizeCapas } from '@/ai/flows/summarize-capas-flow';
+import { Badge } from './ui/badge';
+import { cn } from '@/lib/utils';
 
 const EXPECTED_HEADERS = ['CAPA ID', 'Title', 'Due Date', 'Deadline for effectiveness check', 'Assigned To', 'Pending Steps'];
 const DATE_FORMATS = ['M/d/yyyy', 'MM/dd/yyyy', 'M-d-yyyy', 'MM-dd-yyyy', 'dd.MM.yyyy'];
@@ -268,6 +270,40 @@ export default function CapaDashboard() {
     if (!selectedAssignee) return [];
     return filteredData.filter(item => item['Assigned To'] === selectedAssignee);
   }, [filteredData, selectedAssignee]);
+
+  const columns: DataTableColumn<CapaData>[] = [
+    { accessorKey: 'CAPA ID', header: 'CAPA ID', cell: (row) => row['CAPA ID'] },
+    { 
+      accessorKey: 'Title', 
+      header: 'Title', 
+      cell: (row) => <span className="font-medium">{row['Title']}</span>,
+      visible: columnVisibility['Title'],
+    },
+    { 
+      accessorKey: 'effectiveDueDate', 
+      header: 'Effective Due Date', 
+      cell: (row) => row.effectiveDueDate && isValid(row.effectiveDueDate) ? format(row.effectiveDueDate!, 'PPP') : 'Invalid Date'
+    },
+    { 
+      accessorKey: 'Assigned To', 
+      header: 'Assigned To', 
+      cell: (row) => row['Assigned To'],
+      visible: columnVisibility['Assigned To'],
+    },
+    { 
+      accessorKey: 'Pending Steps', 
+      header: 'Pending Steps', 
+      cell: (row) => <Badge variant="secondary">{row['Pending Steps']}</Badge>,
+      visible: columnVisibility['Pending Steps'],
+    },
+    { 
+      accessorKey: 'status', 
+      header: 'Status', 
+      cell: (row) => row.isOverdue 
+          ? <Badge variant="destructive" className="bg-accent text-accent-foreground hover:bg-accent/80">Overdue</Badge> 
+          : <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent">On Time</Badge>
+    },
+  ];
   
   const MainContent = () => (
     <>
@@ -321,7 +357,11 @@ export default function CapaDashboard() {
                 <CardTitle>CAPA Details</CardTitle>
             </CardHeader>
             <CardContent>
-                <CapaDataTable data={filteredData} columnVisibility={columnVisibility} />
+                <DataTable 
+                  columns={columns} 
+                  data={filteredData}
+                  getRowClassName={(row) => cn(row.isOverdue && "bg-accent/20 hover:bg-accent/30")} 
+                />
             </CardContent>
         </Card>
     </>
@@ -352,10 +392,8 @@ export default function CapaDashboard() {
   );
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6">
-        <h1 className="text-xl font-semibold tracking-tight text-primary">CAPA Insights</h1>
-        <div className="ml-auto flex items-center gap-4 sm:gap-6">
+    <div className="flex flex-col">
+       <div className="flex items-center gap-4 sm:gap-6">
             <RadioGroup defaultValue="all" onValueChange={(value) => setPhaseFilter(value as any)} className="flex items-center gap-4">
                 <div className="flex items-center space-x-2">
                     <RadioGroupItem value="all" id="r1" />
@@ -380,7 +418,7 @@ export default function CapaDashboard() {
                 <Label htmlFor="show-completed">Show Completed</Label>
             </div>
 
-            <div className='flex items-center gap-2'>
+            <div className='flex items-center gap-2 ml-auto'>
                 <Label htmlFor="capa-csv" className="sr-only">Upload CSV</Label>
                 <Input id="capa-csv" type="file" accept=".csv,.tsv,.txt" onChange={handleFileUpload} className="w-full max-w-[150px] sm:max-w-xs text-sm file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
             </div>
@@ -455,10 +493,9 @@ export default function CapaDashboard() {
             </DropdownMenu>
 
         </div>
-      </header>
-      <main className="flex-1 p-4 sm:p-6 space-y-6">
+      <div className="flex-1 p-4 sm:p-6 space-y-6 pt-2">
         {isLoading ? <LoadingState /> : (capaData.length > 0 ? <MainContent /> : <EmptyState />)}
-      </main>
+      </div>
 
       <Dialog open={!!selectedAssignee} onOpenChange={(open) => !open && setSelectedAssignee(null)}>
         <DialogContent className="max-w-3xl">
