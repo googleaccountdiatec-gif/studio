@@ -17,13 +17,22 @@ import { CapaDataTable } from './capa-data-table';
 import { CapaChart } from './capa-chart';
 import { Skeleton } from './ui/skeleton';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { summarizeCapas } from '@/ai/flows/summarize-capas-flow';
 
-const EXPECTED_HEADERS = ['CAPA ID', 'Tittle', 'Due Date', 'Deadline for effectiveness check', 'Assigned To', 'Pending Steps'];
+const EXPECTED_HEADERS = ['CAPA ID', 'Title', 'Due Date', 'Deadline for effectiveness check', 'Assigned To', 'Pending Steps'];
 const DATE_FORMATS = ['M/d/yyyy', 'MM/dd/yyyy', 'M-d-yyyy', 'MM-dd-yyyy', 'dd.MM.yyyy'];
 
 const parseDate = (dateString: string): Date => {
   if (!dateString) return new Date('invalid');
+  const ddMMyyyy = dateString.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (ddMMyyyy) {
+    const [, day, month, year] = ddMMyyyy;
+    const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
+    if (isValid(parsed)) return parsed;
+  }
+
   for (const format of DATE_FORMATS) {
     const parsedDate = parse(dateString.trim(), format, new Date());
     if (isValid(parsedDate)) {
@@ -33,16 +42,61 @@ const parseDate = (dateString: string): Date => {
   return new Date('invalid');
 }
 
+const parseCustomCSV = (text: string): string[][] => {
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentField = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (char === '"') {
+      if (inQuotes && text[i + 1] === '"') {
+        currentField += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ';' && !inQuotes) {
+      currentRow.push(currentField.trim());
+      currentField = '';
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (i > 0 && text[i - 1] !== '\n' && text[i-1] !== '\r') {
+        currentRow.push(currentField.trim());
+        rows.push(currentRow);
+        currentRow = [];
+        currentField = '';
+      }
+       if (char === '\r' && text[i+1] === '\n') {
+         i++;
+       }
+    } else {
+      currentField += char;
+    }
+  }
+
+  if (currentField || currentRow.length > 0) {
+    currentRow.push(currentField.trim());
+    rows.push(currentRow);
+  }
+
+  return rows.filter(row => row.length > 1 || (row.length === 1 && row[0] !== ''));
+};
+
+
 export default function CapaDashboard() {
   const [capaData, setCapaData] = useState<CapaData[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [phaseFilter, setPhaseFilter] = useState<'all' | 'execution' | 'effectiveness'>('all');
   const [summary, setSummary] = useState<string | null>(null);
   const { toast } = useToast();
 
   const [columnVisibility, setColumnVisibility] = useState({
-    'Tittle': true,
+    'Title': true,
     'Assigned To': true,
     'Pending Steps': true,
   });
@@ -85,21 +139,28 @@ export default function CapaDashboard() {
       }
       
       try {
-        const rows = text.split(/\r?\n/).filter(row => row.trim() !== '');
-        const header = rows[0].split('\t').map(h => h.trim().replace(/[\uFEFF]/g, ''));
+        const rows = parseCustomCSV(text);
+
+        if (rows.length < 2) {
+          throw new Error("File must contain a header and at least one data row.");
+        }
+        
+        const header = rows[0].map(h => h.trim().replace(/[\uFEFF]/g, ''));
   
         const missingHeaders = EXPECTED_HEADERS.filter(h => !header.includes(h));
         if (missingHeaders.length > 0) {
           throw new Error(`File is missing required columns: ${missingHeaders.join(', ')}`);
         }
   
+        const headerMap = header.reduce((acc, h, i) => ({ ...acc, [h]: i }), {} as Record<string, number>);
+
         const data: CapaData[] = rows.slice(1).map(row => {
-          const values = row.split('\t');
-          const entry: CapaData = {} as CapaData;
-          header.forEach((h, i) => {
-            (entry as any)[h] = values[i]?.trim() || '';
-          });
-          return entry;
+            const entry: CapaData = {} as CapaData;
+            EXPECTED_HEADERS.forEach(h => {
+                const index = headerMap[h];
+                (entry as any)[h] = row[index]?.trim() || '';
+            });
+            return entry;
         });
   
         setCapaData(data);
@@ -129,7 +190,18 @@ export default function CapaDashboard() {
   const processedData = useMemo(() => {
     const today = startOfDay(new Date());
 
-    return capaData.map(item => {
+    let baseData = showCompleted 
+      ? capaData 
+      : capaData.filter(item => item['Pending Steps'] && item['Pending Steps'].trim() !== '');
+
+    if (phaseFilter !== 'all') {
+      baseData = baseData.filter(item => {
+        const isEffectiveness = item['Pending Steps']?.toLowerCase().includes('effectiveness');
+        return phaseFilter === 'effectiveness' ? isEffectiveness : !isEffectiveness;
+      });
+    }
+
+    return baseData.map(item => {
       const isEffectivenessStep = item['Pending Steps']?.toLowerCase().includes('effectiveness');
       const dateString = isEffectivenessStep ? item['Deadline for effectiveness check'] : item['Due Date'];
       
@@ -142,7 +214,7 @@ export default function CapaDashboard() {
       
       return { ...item, isOverdue, effectiveDueDate };
     });
-  }, [capaData]);
+  }, [capaData, showCompleted, phaseFilter]);
 
   const filteredData = useMemo(() => {
     if (!dateRange?.from) {
@@ -270,7 +342,31 @@ export default function CapaDashboard() {
     <div className="flex flex-col min-h-screen">
       <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6">
         <h1 className="text-xl font-semibold tracking-tight text-primary">CAPA Insights</h1>
-        <div className="ml-auto flex items-center gap-2 sm:gap-4">
+        <div className="ml-auto flex items-center gap-4 sm:gap-6">
+            <RadioGroup defaultValue="all" onValueChange={(value) => setPhaseFilter(value as any)} className="flex items-center gap-4">
+                <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="all" id="r1" />
+                    <Label htmlFor="r1">All Phases</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="execution" id="r2" />
+                    <Label htmlFor="r2">Execution</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="effectiveness" id="r3" />
+                    <Label htmlFor="r3">Effectiveness</Label>
+                </div>
+            </RadioGroup>
+
+            <div className="flex items-center gap-2">
+                <Switch 
+                    id="show-completed" 
+                    checked={showCompleted} 
+                    onCheckedChange={setShowCompleted}
+                />
+                <Label htmlFor="show-completed">Show Completed</Label>
+            </div>
+
             <div className='flex items-center gap-2'>
                 <Label htmlFor="capa-csv" className="sr-only">Upload CSV</Label>
                 <Input id="capa-csv" type="file" accept=".csv,.tsv,.txt" onChange={handleFileUpload} className="w-full max-w-[150px] sm:max-w-xs text-sm file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
@@ -325,8 +421,8 @@ export default function CapaDashboard() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                   <DropdownMenuCheckboxItem
-                      checked={columnVisibility['Tittle']}
-                      onCheckedChange={(value) => setColumnVisibility(prev => ({...prev, 'Tittle': !!value}))}
+                      checked={columnVisibility['Title']}
+                      onCheckedChange={(value) => setColumnVisibility(prev => ({...prev, 'Title': !!value}))}
                   >
                       Title
                   </DropdownMenuCheckboxItem>

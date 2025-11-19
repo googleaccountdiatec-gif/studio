@@ -13,7 +13,7 @@ import { CapaData } from '@/lib/types';
 
 const SummarizeCapasInputSchema = z.array(z.object({
     'CAPA ID': z.string(),
-    'Tittle': z.string(),
+    'Title': z.string(),
     'Due Date': z.string(),
     'Deadline for effectiveness check': z.string(),
     'Assigned To': z.string(),
