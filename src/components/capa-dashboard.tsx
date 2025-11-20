@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, ChangeEvent } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Calendar as CalendarIcon, FileUp, Users, AlertTriangle, CheckCircle, ListTodo, Columns, Sparkles } from 'lucide-react';
@@ -25,8 +24,9 @@ import { summarizeCapas } from '@/ai/flows/summarize-capas-flow';
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
 import { getProductionTeam } from '@/lib/teams';
+import { useData } from '@/contexts/data-context';
 
-const EXPECTED_HEADERS = ['CAPA ID', 'Title', 'Due Date', 'Deadline for effectiveness check', 'Assigned To', 'Pending Steps'];
+
 const DATE_FORMATS = ['M/d/yyyy', 'MM/dd/yyyy', 'M-d-yyyy', 'MM-dd-yyyy', 'dd.MM.yyyy'];
 
 const parseDate = (dateString: string): Date => {
@@ -47,53 +47,9 @@ const parseDate = (dateString: string): Date => {
   return new Date('invalid');
 }
 
-const parseCustomCSV = (text: string): string[][] => {
-  const rows: string[][] = [];
-  let currentRow: string[] = [];
-  let currentField = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-
-    if (char === '"') {
-      if (inQuotes && text[i + 1] === '"') {
-        currentField += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ';' && !inQuotes) {
-      currentRow.push(currentField.trim());
-      currentField = '';
-    } else if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (i > 0 && text[i - 1] !== '\n' && text[i-1] !== '\r') {
-        currentRow.push(currentField.trim());
-        rows.push(currentRow);
-        currentRow = [];
-        currentField = '';
-      }
-       if (char === '\r' && text[i+1] === '\n') {
-         i++;
-       }
-    } else {
-      currentField += char;
-    }
-  }
-
-  if (currentField || currentRow.length > 0) {
-    currentRow.push(currentField.trim());
-    rows.push(currentRow);
-  }
-
-  return rows.filter(row => row.length > 1 || (row.length === 1 && row[0] !== ''));
-};
-
-
 export default function CapaDashboard() {
-  const [capaData, setCapaData] = useState<CapaData[]>([]);
+  const { capaData } = useData();
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [isLoading, setIsLoading] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [phaseFilter, setPhaseFilter] = useState<'all' | 'execution' | 'effectiveness'>('all');
@@ -125,74 +81,6 @@ export default function CapaDashboard() {
     } finally {
       setIsSummarizing(false);
     }
-  };
-
-  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsLoading(true);
-    setSummary(null);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (!text) {
-        toast({
-          variant: "destructive",
-          title: "Error Reading File",
-          description: "Could not read the uploaded file.",
-        });
-        setIsLoading(false);
-        return;
-      }
-      
-      try {
-        const rows = parseCustomCSV(text);
-
-        if (rows.length < 2) {
-          throw new Error("File must contain a header and at least one data row.");
-        }
-        
-        const header = rows[0].map(h => h.trim().replace(/[\uFEFF]/g, ''));
-  
-        const missingHeaders = EXPECTED_HEADERS.filter(h => !header.includes(h));
-        if (missingHeaders.length > 0) {
-          throw new Error(`File is missing required columns: ${missingHeaders.join(', ')}`);
-        }
-  
-        const headerMap = header.reduce((acc, h, i) => ({ ...acc, [h]: i }), {} as Record<string, number>);
-
-        const data: CapaData[] = rows.slice(1).map(row => {
-            const entry: CapaData = {} as CapaData;
-            EXPECTED_HEADERS.forEach(h => {
-                const index = headerMap[h];
-                (entry as any)[h] = row[index]?.trim() || '';
-            });
-            return entry;
-        });
-  
-        setCapaData(data);
-        toast({
-          title: "Success",
-          description: `Successfully imported ${data.length} CAPA records.`,
-        });
-      } catch (error) {
-        let errorMessage = "An unknown error occurred during parsing.";
-        if (error instanceof Error) {
-          errorMessage = error.message;
-        }
-        toast({
-          variant: "destructive",
-          title: "File Parsing Error",
-          description: errorMessage,
-        });
-        setCapaData([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
   };
 
   const processedData = useMemo(() => {
@@ -374,27 +262,11 @@ export default function CapaDashboard() {
     </>
   );
 
-  const LoadingState = () => (
-    <div className="space-y-6 animate-pulse">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Skeleton className="h-28" />
-            <Skeleton className="h-28" />
-            <Skeleton className="h-28" />
-            <Skeleton className="h-28" />
-        </div>
-        <div className="grid gap-4 lg:grid-cols-5">
-            <Skeleton className="h-96 lg:col-span-3" />
-            <Skeleton className="h-96 lg:col-span-2" />
-        </div>
-        <Skeleton className="h-96" />
-    </div>
-  );
-
   const EmptyState = () => (
     <div className="flex flex-col items-center justify-center text-center py-20 px-4 rounded-lg border-2 border-dashed border-muted-foreground/30">
         <FileUp className="h-16 w-16 text-muted-foreground mb-4"/>
         <h2 className="text-2xl font-semibold mb-2">Upload Your CAPA Data</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">Click the "Choose file" button to upload a .csv or .tsv file and start visualizing your Corrective and Preventive Actions.</p>
+        <p className="text-muted-foreground mb-6 max-w-md">Please upload a "CAPA.csv" file to begin.</p>
     </div>
   );
 
@@ -439,82 +311,78 @@ export default function CapaDashboard() {
             </div>
 
             <div className='flex items-center gap-2 ml-auto'>
-                <Label htmlFor="capa-csv" className="sr-only">Upload CSV</Label>
-                <Input id="capa-csv" type="file" accept=".csv,.tsv,.txt" onChange={handleFileUpload} className="w-full max-w-[150px] sm:max-w-xs text-sm file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
-            </div>
-            
-            <Button
-                variant="outline"
-                onClick={handleSummarize}
-                disabled={isLoading || isSummarizing || capaData.length === 0}
-            >
-                <Sparkles className="mr-2 h-4 w-4" />
-                {isSummarizing ? "Summarizing..." : "Summarize with AI"}
-            </Button>
+                <Button
+                    variant="outline"
+                    onClick={handleSummarize}
+                    disabled={isSummarizing || capaData.length === 0}
+                >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {isSummarizing ? "Summarizing..." : "Summarize with AI"}
+                </Button>
 
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button
-                        id="date"
-                        variant={"outline"}
-                        className="w-[200px] sm:w-[300px] justify-start text-left font-normal"
-                    >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange?.from ? (
-                            dateRange.to ? (
-                                <>
-                                    {format(dateRange.from, "LLL dd, y")} -{" "}
-                                    {format(dateRange.to, "LLL dd, y")}
-                                </>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button
+                            id="date"
+                            variant={"outline"}
+                            className="w-[200px] sm:w-[300px] justify-start text-left font-normal"
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateRange?.from ? (
+                                dateRange.to ? (
+                                    <>
+                                        {format(dateRange.from, "LLL dd, y")} -{" "}
+                                        {format(dateRange.to, "LLL dd, y")}
+                                    </>
+                                ) : (
+                                    format(dateRange.from, "LLL dd, y")
+                                )
                             ) : (
-                                format(dateRange.from, "LLL dd, y")
-                            )
-                        ) : (
-                            <span>Filter by date...</span>
-                        )}
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                    <Calendar
-                        initialFocus
-                        mode="range"
-                        defaultMonth={dateRange?.from}
-                        selected={dateRange}
-                        onSelect={setDateRange}
-                        numberOfMonths={2}
-                    />
-                </PopoverContent>
-            </Popover>
+                                <span>Filter by date...</span>
+                            )}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                        <Calendar
+                            initialFocus
+                            mode="range"
+                            defaultMonth={dateRange?.from}
+                            selected={dateRange}
+                            onSelect={setDateRange}
+                            numberOfMonths={2}
+                        />
+                    </PopoverContent>
+                </Popover>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className='hidden sm:inline-flex'><Columns className="mr-2 h-4 w-4" /> View</Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                  <DropdownMenuCheckboxItem
-                      checked={columnVisibility['Title']}
-                      onCheckedChange={(value) => setColumnVisibility(prev => ({...prev, 'Title': !!value}))}
-                  >
-                      Title
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                      checked={columnVisibility['Assigned To']}
-                      onCheckedChange={(value) => setColumnVisibility(prev => ({...prev, 'Assigned To': !!value}))}
-                  >
-                      Assigned To
-                  </DropdownMenuCheckboxItem>
-                   <DropdownMenuCheckboxItem
-                      checked={columnVisibility['Pending Steps']}
-                      onCheckedChange={(value) => setColumnVisibility(prev => ({...prev, 'Pending Steps': !!value}))}
-                  >
-                      Pending Steps
-                  </DropdownMenuCheckboxItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className='hidden sm:inline-flex'><Columns className="mr-2 h-4 w-4" /> View</Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                      <DropdownMenuCheckboxItem
+                          checked={columnVisibility['Title']}
+                          onCheckedChange={(value) => setColumnVisibility(prev => ({...prev, 'Title': !!value}))}
+                      >
+                          Title
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                          checked={columnVisibility['Assigned To']}
+                          onCheckedChange={(value) => setColumnVisibility(prev => ({...prev, 'Assigned To': !!value}))}
+                      >
+                          Assigned To
+                      </DropdownMenuCheckboxItem>
+                       <DropdownMenuCheckboxItem
+                          checked={columnVisibility['Pending Steps']}
+                          onCheckedChange={(value) => setColumnVisibility(prev => ({...prev, 'Pending Steps': !!value}))}
+                      >
+                          Pending Steps
+                      </DropdownMenuCheckboxItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
         </div>
       <div className="flex-1 p-4 sm:p-6 space-y-6 pt-2">
-        {isLoading ? <LoadingState /> : (capaData.length > 0 ? <MainContent /> : <EmptyState />)}
+        {capaData.length > 0 ? <MainContent /> : <EmptyState />}
       </div>
 
       <Dialog open={!!selectedAssignee} onOpenChange={(open) => !open && setSelectedAssignee(null)}>

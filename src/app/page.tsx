@@ -5,6 +5,7 @@ import CapaDashboard from '@/components/capa-dashboard';
 import ChangeActionDashboard from "@/components/change-action-dashboard";
 import NonConformanceDashboard from "@/components/non-conformance-dashboard";
 import SettingsPage from "@/components/settings-page";
+import { MultiUploader } from "@/components/multi-uploader";
 
 export default function Home() {
   return (
@@ -12,6 +13,7 @@ export default function Home() {
       <div className="flex flex-col min-h-screen">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6">
           <h1 className="text-xl font-semibold tracking-tight text-primary">KPI Insights</h1>
+          <MultiUploader />
         </header>
 
         <main className="flex-1 p-4 sm:p-6 space-y-6">

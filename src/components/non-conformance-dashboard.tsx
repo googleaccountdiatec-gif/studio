@@ -12,8 +12,7 @@ import { DataTable, DataTableColumn } from './data-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-
-const EXPECTED_HEADERS = ["Id", "Non Conformance Title", "Classification", "Pending Steps", "Case Worker", "Deadline for Investigation and Action Plan", "Registration Time", "Registered By", "Reoccurrence"];
+import { useData } from '@/contexts/data-context';
 
 interface NonConformanceData {
   Id: string;
@@ -82,65 +81,14 @@ const parseCustomCSV = (text: string): string[][] => {
 };
 
 export default function NonConformanceDashboard() {
-  const [data, setData] = useState<NonConformanceData[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { nonConformanceData } = useData();
   const [yearFilter, setYearFilter] = useState<'all' | 'current' | 'previous'>('all');
   const [dialogData, setDialogData] = useState<{ title: string; data: NonConformanceData[] } | null>(null);
-  const { toast } = useToast();
 
-  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsLoading(true);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (!text) {
-        toast({ variant: "destructive", title: "Error Reading File", description: "Could not read the uploaded file." });
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const rows = parseCustomCSV(text);
-        if (rows.length < 2) throw new Error("File must have a header and at least one data row.");
-        
-        const header = rows[0].map(h => h.trim().replace(/"/g, ''));
-        const missingHeaders = EXPECTED_HEADERS.filter(h => !header.includes(h));
-        if (missingHeaders.length > 0) throw new Error(`File is missing required columns: ${missingHeaders.join(', ')}`);
-        
-        const headerMap = header.reduce((acc, h, i) => ({ ...acc, [h]: i }), {} as Record<string, number>);
-
-        const parsedData: NonConformanceData[] = rows.slice(1).map(row => {
-          const entry: any = {};
-          EXPECTED_HEADERS.forEach(h => {
-              const index = headerMap[h];
-              entry[h] = row[index]?.trim().replace(/"/g, '') || '';
-          });
-          return entry;
-        });
-
-        setData(parsedData as any[]);
-        toast({ title: "Success", description: `Successfully imported ${parsedData.length} records.` });
-
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-        toast({ variant: "destructive", title: "File Parsing Error", description: errorMessage });
-        setData([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    reader.readAsText(file, 'latin1');
-    event.target.value = '';
-  };
-
-
-  const allDataWithDates = useMemo(() => data.map(item => ({
+  const allDataWithDates = useMemo(() => nonConformanceData.map(item => ({
     ...item,
     registrationDate: parseDate(item["Registration Time"]),
-  })), [data]);
+  })), [nonConformanceData]);
 
   const quarterlyData = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -261,17 +209,10 @@ export default function NonConformanceDashboard() {
     <div className="flex flex-col items-center justify-center text-center py-20 px-4 rounded-lg border-2 border-dashed border-muted-foreground/30">
       <FileUp className="h-16 w-16 text-muted-foreground mb-4"/>
       <h2 className="text-2xl font-semibold mb-2">Upload Your Non-Conformance Data</h2>
-      <p className="text-muted-foreground mb-6 max-w-md">Click the "Choose file" button to upload a .csv file to visualize your Non-Conformances.</p>
+      <p className="text-muted-foreground mb-6 max-w-md">Use the uploader in the header to import your "Non-conformance KPIs.csv" file.</p>
     </div>
   );
   
-   const LoadingState = () => (
-    <div className="space-y-6 animate-pulse">
-        <Skeleton className="h-96" />
-        <Skeleton className="h-96" />
-    </div>
-  );
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4 flex-wrap">
@@ -290,12 +231,8 @@ export default function NonConformanceDashboard() {
                 <Label htmlFor="year-previous">Previous Year</Label>
             </div>
         </RadioGroup>
-        <div className='flex items-center gap-2 ml-auto'>
-            <Label htmlFor="nc-csv" className="sr-only">Upload CSV</Label>
-            <Input id="nc-csv" type="file" accept=".csv,.tsv,.txt" onChange={handleFileUpload} className="w-full max-w-[150px] sm:max-w-xs text-sm file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
-        </div>
       </div>
-      {isLoading ? <LoadingState /> : (data.length > 0 ? <MainContent /> : <EmptyState />)}
+      {nonConformanceData.length > 0 ? <MainContent /> : <EmptyState />}
 
       <Dialog open={!!dialogData} onOpenChange={(open) => !open && setDialogData(null)}>
         <DialogContent className="max-w-4xl">
