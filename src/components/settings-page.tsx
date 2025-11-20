@@ -58,10 +58,22 @@ export default function SettingsPage() {
   };
   
   const themes = [
-    { name: 'light', colors: ['#ECEFF1', '#3F51B5', '#FFAB40'] },
-    { name: 'dark', colors: ['#111827', '#60A5FA', '#FBBF24'] },
-    { name: 'rose', colors: ['#FFF1F2', '#F43F5E', '#FB923C'] },
-    { name: 'slate', colors: ['#0F172A', '#64748B', '#FBBF24'] },
+    // ☀️ Light Theme 
+    // BG: Cool White | Pri: Vibrant Blue | Acc: Golden Orange
+    { name: 'light', colors: ['#F9FAFB', '#2563EB', '#F59E0B'] },
+  
+    // 🌑 Dark Theme
+    // BG: Deep Navy | Pri: White | Acc: Dark Slate
+    { name: 'dark', colors: ['#0F172A', '#F8FAFC', '#1E293B'] },
+  
+    // 🌹 Rose Theme (Baddie Edition)
+    // BG: Softest Pink | Pri: Hot Pink | Acc: THE SEXY BLACK
+    // (hsl(345, 93%, 96%) -> #FFECF1)
+    { name: 'rose', colors: ['#FFECF1', '#E11D48', '#171717'] },
+  
+    // 🌫️ Slate Theme
+    // BG: Matte Grey | Pri: Soft Indigo | Acc: Muted Gunmetal
+    { name: 'slate', colors: ['#23262F', '#687CEB', '#363B49'] },
   ];
 
   return (

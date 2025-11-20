@@ -4,61 +4,89 @@
 
 @layer base {
   :root {
-    --background: 204 17% 95%; /* #ECEFF1 */
-    --foreground: 220 9% 38%;
+    /* Smoother, cooler background */
+    --background: 210 20% 98%; 
+    /* Much darker foreground for better readability */
+    --foreground: 222 47% 11%; 
+
     --card: 0 0% 100%;
-    --card-foreground: 220 9% 38%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 9% 38%;
-    --primary: 231 48% 48%; /* #3F51B5 */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 98%;
-    --secondary-foreground: 231 48% 48%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Slightly more vibrant Primary Blue */
+    --primary: 221 83% 53%; 
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11%;
     --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 56.9%;
-    --accent: 34 100% 63%; /* #FFAB40 */
-    --accent-foreground: 24 9.8% 10%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    /* Adjusted Accent to be less "aggressive orange" */
+    --accent: 35 90% 60%; 
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 231 48% 48%;
-    --chart-1: 231 48% 48%;
-    --chart-2: 34 100% 63%;
-    --chart-3: 173 58% 39%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --ring: 221 83% 53%;
     --radius: 0.5rem;
-  }
-  
-  .rose {
-    --background: 350 100% 98%;
-    --foreground: 350 60% 35%;
-    --card: 350 100% 99%;
-    --card-foreground: 350 60% 35%;
-    --popover: 350 100% 99%;
-    --popover-foreground: 350 60% 35%;
-    --primary: 347 89% 61%;
-    --primary-foreground: 356 100% 97%;
-    --secondary: 350 91% 96%;
-    --secondary-foreground: 347 89% 61%;
-    --muted: 350 91% 96%;
-    --muted-foreground: 350 40% 60%;
-    --accent: 347 89% 61%;
-    --accent-foreground: 356 100% 97%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 350 81% 91%;
-    --input: 350 81% 91%;
-    --ring: 347 89% 61%;
-    --chart-1: 347 89% 61%;
-    --chart-2: 34 100% 63%;
+    
+    /* Chart colors preserved/tuned */
+    --chart-1: 221 83% 53%;
+    --chart-2: 35 90% 60%;
     --chart-3: 173 58% 39%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
   }
 
+  .rose {
+    /* Your new, extra-pink background (Love this!) */
+    --background: 345 93% 96%;
+    
+    /* Deep neutral text for readability */
+    --foreground: 350 20% 20%; 
+
+    --card: 350 50% 99%;
+    --card-foreground: 350 20% 20%;
+    --popover: 350 100% 99%;
+    --popover-foreground: 350 20% 20%;
+    
+    /* Hot Pink Primary */
+    --primary: 340 82% 52%; 
+    --primary-foreground: 350 20% 98%;
+
+    --secondary: 350 30% 94%;
+    --secondary-foreground: 340 82% 52%;
+    --muted: 350 30% 94%;
+    --muted-foreground: 350 10% 50%;
+    
+    /* 🚨 FIX 1: RESTORED SEXY BLACK ACCENT */
+    /* This makes your secondary buttons/icons pop */
+    --accent: 0 0% 9%; 
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 350 20% 90%;
+    --input: 350 20% 90%;
+    --ring: 340 82% 52%;
+    
+    /* 🚨 FIX 2: THE GRAPHS */
+    --chart-1: 340 82% 52%; /* Pink */
+    
+    /* This was the culprit! Changed Orange (34) to Black (0 0% 9%) */
+    --chart-2: 0 0% 9%;     
+    
+    --chart-3: 173 58% 39%; /* Teal */
+    --chart-4: 43 74% 66%;  /* Gold */
+    --chart-5: 27 87% 67%;
+  }
+
   .dark {
+    /* Standard Shadcn Dark Mode - High Contrast */
     --background: 222 47% 11%;
     --foreground: 210 40% 98%;
     --card: 222 47% 11%;
@@ -66,50 +94,47 @@
     --popover: 222 47% 11%;
     --popover-foreground: 210 40% 98%;
     --primary: 210 40% 98%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 17%;
+    --primary-foreground: 222 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 210 40% 98%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 63% 31%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 215 20% 65%;
-    --chart-1: 210 40% 98%;
-    --chart-2: 34 100% 63%;
-    --chart-3: 173 58% 39%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
   }
 
   .slate {
-    --background: 220 13% 18%;
-    --foreground: 210 40% 98%;
-    --card: 220 13% 18%;
-    --card-foreground: 210 40% 98%;
-    --popover: 220 13% 18%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 25%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 25%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 210 40% 98%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 63% 31%;
+    /* Muted, Blue-Grey Dark Mode */
+    --background: 220 15% 16%; /* Slightly lighter than dark */
+    --foreground: 220 15% 95%;
+    
+    --card: 220 15% 20%;
+    --card-foreground: 220 15% 95%;
+    --popover: 220 15% 16%;
+    --popover-foreground: 220 15% 95%;
+    
+    /* Changed Primary from White to a Soft Indigo for .slate identity */
+    --primary: 226 70% 65%; 
+    --primary-foreground: 220 15% 16%;
+    
+    --secondary: 220 15% 25%;
+    --secondary-foreground: 220 15% 95%;
+    --muted: 220 15% 25%;
+    --muted-foreground: 220 10% 65%;
+    
+    --accent: 220 15% 25%;
+    --accent-foreground: 226 70% 65%;
+    
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 25%;
-    --input: 217 33% 25%;
-    --ring: 215 20% 65%;
-    --chart-1: 210 40% 98%;
-    --chart-2: 34 100% 63%;
-    --chart-3: 173 58% 39%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --border: 220 15% 25%;
+    --input: 220 15% 25%;
+    --ring: 226 70% 65%;
   }
 }
 
