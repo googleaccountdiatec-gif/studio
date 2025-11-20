@@ -1,45 +1,113 @@
 # **App Name**: KPI Insights
 
 ## Core Features:
+Modular KPI Dashboards:
 
-- **Modular KPI Dashboards:**
-  - **CAPA (Corrective and Preventive Actions):**
-    - Import CAPA data from CSV/TSV files with robust, flexible parsing.
-    - Automatically calculate overdue CAPAs based on 'Due Date' and 'Deadline for effectiveness check', with phase-aware logic.
-    - Filter CAPAs by time-frame, completion status, operational phase (Execution vs. Effectiveness), and team (Production Only vs. All).
-    - Interactive data visualizations, including charts for CAPA status and distribution by assignee.
-    - Clickable charts to drill down into specific data segments (e.g., view all CAPAs for a selected assignee).
-    - Detailed data table with customizable column visibility.
-    - AI-powered summarization of the current CAPA landscape.
-  - **Change Action:**
-    - Import Change Action data from CSV/TSV files with robust parsing.
-    - Filter actions by completion status and team (Production Only vs. All).
-    - Interactive charts for monthly registrations and actions grouped by Change ID.
-    - Clickable charts to drill down into the details of a specific Change ID.
-    - Comprehensive data table displaying all active actions, with overdue items highlighted.
-  - **Non-conformance:**
-    - Import Non-conformance data from CSV/TSV files with robust parsing.
-    - Filter data by year (Current vs. Previous).
-    - Interactive charts displaying quarterly data for:
-        - Risk & Total Volume (Low Risk, High Risk, Total).
-        - Reoccurrence Trend.
-    - Clickable charts to drill down into the specific NCs for a selected data point.
-    
-- **Centralized Settings:**
-  - A dedicated "Settings" tab to manage application-wide configurations.
-  - View and edit the list of "Production Team" members with changes saved to local storage.
-  - Selectable color palettes (Light, Dark, Rose, Slate) to customize the application's appearance.
+CAPA (Corrective and Preventive Actions):
 
-- **Unified Interface:**
-  - Tabbed navigation to seamlessly switch between different KPI modules.
-  - Centralized header with the application title, "KPI Insights".
+Import CAPA data from CSV/TSV files with robust, flexible parsing.
 
-## Style Guidelines:
+Smart Deadlines: Automatically calculate overdue CAPAs based on 'Due Date' and 'Deadline for effectiveness check', utilizing phase-aware logic to prevent false alarms.
 
-- Primary color: Deep blue (#3F51B5) to convey trust and stability, fitting for professional data visualization.
-- Background color: Light grey (#ECEFF1), subtly tinted blue, to maintain focus on the data.
-- Accent color: Soft orange (#FFAB40) for highlighting overdue CAPAs, drawing attention without overwhelming.
-- Body and headline font: 'Inter', a sans-serif, will be used for all text. This is suitable for all headlines and body text
-- Use simple, geometric icons to represent different aspects of KPI data.
-- A clean, card-based layout to present KPIs and data points in an organized manner.
-- Subtle animations to show loading states and transitions, improving user experience without being distracting.
+Dynamic Filtering: Filter CAPAs by time-frame, completion status, operational phase (Execution vs. Effectiveness), and team contexts.
+
+High-Contrast Visualization: Interactive charts utilizing the Pink vs. Black data series for immediate status recognition.
+
+Interactive Drill-Downs: Clickable chart segments reveal detailed data in frosted-glass overlays.
+
+Data Grid: Detailed data table with customizable column visibility and "pilled" status badges.
+
+AI Executive Summary: AI-powered summarization to provide the "tea" on the current CAPA landscape.
+
+Change Action:
+
+Robust CSV/TSV import for Change Action data.
+
+completion status and team filtering.
+
+Trend Analysis: Interactive charts for monthly registrations and actions, grouped by Change ID using the primary and secondary theme colors.
+
+Deep Dive: Clickable charts to drill down into specific Change ID details.
+
+Active Action Monitor: Comprehensive data table displaying active actions, with overdue items highlighted using the semantic --destructive (Soft Red) color for urgency without aggression.
+
+Non-conformance:
+
+Import Non-conformance data with historical comparison capabilities.
+
+Year-over-Year View: Filter data by Current vs. Previous Year.
+
+Quarterly Risk Visuals: Interactive charts displaying:
+
+Risk & Total Volume (Low Risk/High Risk/Total).
+
+Reoccurrence Trends.
+
+Clickable drill-down interactions.
+
+Centralized Settings:
+
+A dedicated "Settings" tab wrapped in a glass-effect container.
+
+Team Management: View and edit "Production Team" members with persistence via local storage.
+
+Aesthetic Control: Selectable color palettes with live preview swatches:
+
+Light: (Clean White/Blue/Gold)
+
+Dark: (High Contrast Navy/White)
+
+Rose: (Soft Blush/Hot Pink/Ink Black)
+
+Slate: (Muted Grey/Indigo/Gunmetal)
+
+Unified Interface:
+
+Glassmorphism Navigation: Tabbed navigation floating on a blurred background to seamlessly switch between modules.
+
+Header: Minimalist, centralized header with the application title.
+
+Style Guidelines:
+Design Philosophy: "Modern Hyper-Femininity." A balance of soft, approachable backgrounds with dominant, high-contrast data visualization.
+
+Primary Palette (Theme Dependent):
+
+Rose Mode: Hot Pink (#E11D48) for primary actions and active states, signaling energy and passion.
+
+Slate/Dark Mode: Soft Indigo (#687CEB) or Stark White for readability in low-light environments.
+
+Backgrounds:
+
+Moving away from flat grey. We utilize Tinted Surfaces:
+
+Rose: A very pale blush (#FFECF1) to reduce eye strain while maintaining aesthetic.
+
+Dark: Deep Obsidian (#0F172A) for maximum "Dark Mode" comfort.
+
+Accents & Data Visualization:
+
+The "Power" Accent: Deep Ink Black (#171717) creates a stark, fashionable contrast against the pink primary.
+
+Status Colors:
+
+Overdue: Soft Red (--destructive) rather than aggressive alarmist red.
+
+Secondary Data: Teal (#0D9488) or Gold (#EAB308) for chart segments to differentiate from the Pink/Black dominance.
+
+UI Patterns: Glassmorphism:
+
+Cards: Data containers use a frosted glass effect (bg-card/40 + backdrop-blur-md) with subtle white borders (border-white/20) to create depth and hierarchy.
+
+Shadows: Soft, diffuse shadows (shadow-xl) to lift glass elements off the background.
+
+Typography:
+
+Font: 'Inter' (Sans-serif).
+
+Weights: Heavy use of Bold headings to contrast against the airy, transparent backgrounds.
+
+Interaction:
+
+Hover States: Elements gently lift or increase in opacity when interacted with.
+
+Transitions: Smooth ease-in-out transitions for all color and layout changes.
