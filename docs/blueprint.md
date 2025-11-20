@@ -18,11 +18,17 @@
     - Clickable charts to drill down into the details of a specific Change ID.
     - Comprehensive data table displaying all active actions, with overdue items highlighted.
   - **Non-conformance:**
-    - Placeholder for importing, visualizing, and analyzing Non-conformance data.
-
+    - Import Non-conformance data from CSV/TSV files with robust parsing.
+    - Filter data by year (Current vs. Previous).
+    - Interactive charts displaying quarterly data for:
+        - Risk & Total Volume (Low Risk, High Risk, Total).
+        - Reoccurrence Trend.
+    - Clickable charts to drill down into the specific NCs for a selected data point.
+    
 - **Centralized Settings:**
   - A dedicated "Settings" tab to manage application-wide configurations.
-  - View the current list of "Production Team" members (editing functionality planned).
+  - View and edit the list of "Production Team" members with changes saved to local storage.
+  - Selectable color palettes (Light, Dark, Rose, Slate) to customize the application's appearance.
 
 - **Unified Interface:**
   - Tabbed navigation to seamlessly switch between different KPI modules.
