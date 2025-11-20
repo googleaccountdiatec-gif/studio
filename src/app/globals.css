@@ -4,17 +4,15 @@
 
 @layer base {
   :root {
-    /* Smoother, cooler background */
+    /* --- BASE COLORS --- */
     --background: 210 20% 98%; 
-    /* Much darker foreground for better readability */
     --foreground: 222 47% 11%; 
-
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    /* Slightly more vibrant Primary Blue */
+    /* Corporate Baddie Blue */
     --primary: 221 83% 53%; 
     --primary-foreground: 210 40% 98%;
 
@@ -22,11 +20,8 @@
     --secondary-foreground: 222 47% 11%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-
-    /* Adjusted Accent to be less "aggressive orange" */
     --accent: 35 90% 60%; 
     --accent-foreground: 210 40% 98%;
-
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
@@ -34,21 +29,19 @@
     --ring: 221 83% 53%;
     --radius: 0.5rem;
     
-    /* Chart colors preserved/tuned */
-    --chart-1: 221 83% 53%;
-    --chart-2: 35 90% 60%;
-    --chart-3: 173 58% 39%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    /* --- CHART GLOW UP: PROFESSIONAL --- */
+    /* A trust-inspiring cool spectrum */
+    --chart-1: 221 83% 53%; /* Primary Blue */
+    --chart-2: 199 89% 48%; /* Cyan */
+    --chart-3: 250 60% 60%; /* Soft Violet */
+    --chart-4: 43 96% 56%;  /* Amber (Warning/Attention) */
+    --chart-5: 160 84% 39%; /* Emerald (Success) */
   }
 
   .rose {
-    /* Your new, extra-pink background (Love this!) */
+    /* --- BASE COLORS --- */
     --background: 345 93% 96%;
-    
-    /* Deep neutral text for readability */
     --foreground: 350 20% 20%; 
-
     --card: 350 50% 99%;
     --card-foreground: 350 20% 20%;
     --popover: 350 100% 99%;
@@ -63,8 +56,7 @@
     --muted: 350 30% 94%;
     --muted-foreground: 350 10% 50%;
     
-    /* 🚨 FIX 1: RESTORED SEXY BLACK ACCENT */
-    /* This makes your secondary buttons/icons pop */
+    /* Sexy Black Accent */
     --accent: 0 0% 9%; 
     --accent-foreground: 0 0% 98%;
 
@@ -74,19 +66,17 @@
     --input: 350 20% 90%;
     --ring: 340 82% 52%;
     
-    /* 🚨 FIX 2: THE GRAPHS */
-    --chart-1: 340 82% 52%; /* Pink */
-    
-    /* This was the culprit! Changed Orange (34) to Black (0 0% 9%) */
-    --chart-2: 0 0% 9%;     
-    
-    --chart-3: 173 58% 39%; /* Teal */
-    --chart-4: 43 74% 66%;  /* Gold */
-    --chart-5: 27 87% 67%;
+    /* --- CHART GLOW UP: THE BOUDOIR PALETTE --- */
+    /* This is a gradient of pinks, purples, and expensive metals */
+    --chart-1: 340 82% 52%; /* Hot Pink (The Star) */
+    --chart-2: 0 0% 9%;     /* The Black (High Contrast) */
+    --chart-3: 280 65% 60%; /* Royal Purple (Complementary) */
+    --chart-4: 20 90% 75%;  /* Rose Gold / Peach */
+    --chart-5: 20 90% 75%; /* Rose Gold / Peach */
   }
 
   .dark {
-    /* Standard Shadcn Dark Mode - High Contrast */
+    /* --- BASE COLORS --- */
     --background: 222 47% 11%;
     --foreground: 210 40% 98%;
     --card: 222 47% 11%;
@@ -106,19 +96,26 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+
+    /* --- CHART GLOW UP: NEON NIGHTS --- */
+    /* High contrast neon pastels for dark mode visibility */
+    --chart-1: 220 70% 50%; /* Electric Blue */
+    --chart-2: 160 60% 45%; /* Neon Green */
+    --chart-3: 30 80% 55%;  /* Orange Peel */
+    --chart-4: 280 65% 60%; /* Neon Purple */
+    --chart-5: 340 75% 55%; /* Hot Pink */
   }
 
   .slate {
-    /* Muted, Blue-Grey Dark Mode */
-    --background: 220 15% 16%; /* Slightly lighter than dark */
+    /* --- BASE COLORS --- */
+    --background: 220 15% 16%; 
     --foreground: 220 15% 95%;
-    
     --card: 220 15% 20%;
     --card-foreground: 220 15% 95%;
     --popover: 220 15% 16%;
     --popover-foreground: 220 15% 95%;
     
-    /* Changed Primary from White to a Soft Indigo for .slate identity */
+    /* Soft Indigo Identity */
     --primary: 226 70% 65%; 
     --primary-foreground: 220 15% 16%;
     
@@ -126,15 +123,21 @@
     --secondary-foreground: 220 15% 95%;
     --muted: 220 15% 25%;
     --muted-foreground: 220 10% 65%;
-    
     --accent: 220 15% 25%;
     --accent-foreground: 226 70% 65%;
-    
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
     --border: 220 15% 25%;
     --input: 220 15% 25%;
     --ring: 226 70% 65%;
+
+    /* --- CHART GLOW UP: VAPORWAVE DREAM --- */
+    /* Muted, sophisticated cool tones */
+    --chart-1: 226 70% 65%; /* The Indigo Primary */
+    --chart-2: 190 80% 70%; /* Icy Blue */
+    --chart-3: 260 50% 70%; /* Muted Lavender */
+    --chart-4: 330 70% 70%; /* Dusty Rose */
+    --chart-5: 150 40% 60%; /* Sage Green */
   }
 }
 
