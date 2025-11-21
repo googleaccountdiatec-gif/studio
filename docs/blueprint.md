@@ -30,7 +30,7 @@
     - Top-level stats for Total Assignments, Completion Rate (Radial Chart), and Overdue List.
     - "Training Overview" bar chart showing completed vs. pending training per trainee.
     - "Process Overview" pie chart showing the breakdown of training categories.
-    - Detailed "Call Out List" table with status badges (Completed, WIP, Overdue) and tooltips for pending steps.
+    - Detailed "Comprehensive List" table with status badges (Completed, WIP, Overdue) and tooltips for pending steps. Should be able to be filtered based on "Overdue"
     
 - **Centralized Settings:**
   - A dedicated "Settings" tab to manage application-wide configurations.

@@ -135,7 +135,7 @@ export default function TrainingDashboard() {
       accessorKey: 'status', 
       header: 'Status', 
       cell: (row) => {
-        if (row.status === 'Completed') return <Badge className="bg-teal-500 hover:bg-teal-600 text-white">Slay</Badge>;
+        if (row.status === 'Completed') return <Badge className="bg-teal-500 hover:bg-teal-600 text-white">Completed</Badge>;
         if (row.status === 'Overdue') return <Badge variant="destructive">Late!</Badge>;
         
         return (
@@ -235,7 +235,7 @@ export default function TrainingDashboard() {
         </GlassCard>
 
         <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Department Vibe Check</h3>
+            <h3 className="text-lg font-semibold mb-4">Process Overview</h3>
             <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                     <Pie
@@ -260,7 +260,7 @@ export default function TrainingDashboard() {
 
       {/* Detailed View */}
       <GlassCard className="p-6">
-        <h3 className="text-lg font-semibold mb-4">The Call Out List</h3>
+        <h3 className="text-lg font-semibold mb-4">Comprehensive List</h3>
         <DataTable 
             columns={columns} 
             data={processedData}
