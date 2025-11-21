@@ -93,19 +93,21 @@ export default function TrainingDashboard() {
   }, [processedData]);
 
   const chartData = useMemo(() => {
-    const traineeStats: { [key: string]: { name: string; completed: number; pending: number } } = {};
+    const traineeStats: { [key: string]: { name: string; completed: number; pending: number; overdue: number } } = {};
     processedData.forEach(record => {
       if (!traineeStats[record.trainee]) {
-        traineeStats[record.trainee] = { name: record.trainee, completed: 0, pending: 0 };
+        traineeStats[record.trainee] = { name: record.trainee, completed: 0, pending: 0, overdue: 0 };
       }
       if (record.status === 'Completed') {
         traineeStats[record.trainee].completed++;
+      } else if (record.status === 'Overdue') {
+        traineeStats[record.trainee].overdue++;
       } else {
         traineeStats[record.trainee].pending++;
       }
     });
-    // Sort by total (completed + pending) and take top 20 to ensure graph is manageable but informative
-    return Object.values(traineeStats).sort((a, b) => (b.completed + b.pending) - (a.completed + a.pending));
+    // Sort by total (completed + pending + overdue)
+    return Object.values(traineeStats).sort((a, b) => (b.completed + b.pending + b.overdue) - (a.completed + a.pending + a.overdue));
   }, [processedData]);
 
   const pieData = useMemo(() => {
@@ -135,7 +137,7 @@ export default function TrainingDashboard() {
       accessorKey: 'status', 
       header: 'Status', 
       cell: (row) => {
-        if (row.status === 'Completed') return <Badge className="bg-teal-500 hover:bg-teal-600 text-white">Completed</Badge>;
+        if (row.status === 'Completed') return <Badge className="bg-teal-500 hover:bg-teal-600 text-white">Slay</Badge>;
         if (row.status === 'Overdue') return <Badge variant="destructive">Late!</Badge>;
         
         return (
@@ -163,6 +165,9 @@ export default function TrainingDashboard() {
         </div>
     );
   }
+
+  // Dynamic height calculation: 50px per user + 50px buffer, with a minimum of 300px
+  const chartHeight = Math.max(chartData.length * 50 + 50, 300);
 
   return (
     <div className="space-y-6">
@@ -221,21 +226,21 @@ export default function TrainingDashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         <GlassCard className="p-6">
             <h3 className="text-lg font-semibold mb-4">Training Overview</h3>
-            {/* Increased height from 300 to 600 to accommodate more names */}
-            <ResponsiveContainer width="100%" height={600}>
-                <BarChart data={chartData} layout="vertical" margin={{ left: 40 }}>
+            <ResponsiveContainer width="100%" height={chartHeight}>
+                <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 20 }}>
                     <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} interval={0} />
+                    <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0} />
                     <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
                     <Legend />
-                    <Bar dataKey="completed" name="Completed" stackId="a" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="pending" name="Pending" stackId="a" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="completed" name="Completed" stackId="a" fill="hsl(var(--chart-1))" />
+                    <Bar dataKey="pending" name="Pending" stackId="a" fill="hsl(var(--chart-2))" />
+                    <Bar dataKey="overdue" name="Overdue" stackId="a" fill="hsl(var(--destructive))" radius={[0, 4, 4, 0]} />
                 </BarChart>
             </ResponsiveContainer>
         </GlassCard>
 
         <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Process Overview</h3>
+            <h3 className="text-lg font-semibold mb-4">Department Vibe Check</h3>
             <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                     <Pie
@@ -260,7 +265,7 @@ export default function TrainingDashboard() {
 
       {/* Detailed View */}
       <GlassCard className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Comprehensive List</h3>
+        <h3 className="text-lg font-semibold mb-4">The Call Out List</h3>
         <DataTable 
             columns={columns} 
             data={processedData}
