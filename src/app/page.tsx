@@ -5,6 +5,7 @@ import CapaDashboard from '@/components/capa-dashboard';
 import ChangeActionDashboard from "@/components/change-action-dashboard";
 import NonConformanceDashboard from "@/components/non-conformance-dashboard";
 import TrainingDashboard from "@/components/training-dashboard";
+import CompendiumDashboard from "@/components/compendium-dashboard";
 import SettingsPage from "@/components/settings-page";
 import { MultiUploader } from "@/components/multi-uploader";
 
@@ -18,8 +19,9 @@ export default function Home() {
         </header>
 
         <main className="flex-1 p-4 sm:p-6 space-y-6">
-          <Tabs defaultValue="capa">
+          <Tabs defaultValue="overview">
             <TabsList>
+              <TabsTrigger value="overview">Total Overview</TabsTrigger>
               <TabsTrigger value="capa">CAPA</TabsTrigger>
               <TabsTrigger value="change-action">Change Action</TabsTrigger>
               <TabsTrigger value="non-conformance">Non-conformance</TabsTrigger>
@@ -27,6 +29,9 @@ export default function Home() {
               <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
 
+            <TabsContent value="overview">
+              <CompendiumDashboard />
+            </TabsContent>
             <TabsContent value="capa">
               <CapaDashboard />
             </TabsContent>

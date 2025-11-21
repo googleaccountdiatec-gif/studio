@@ -3,6 +3,11 @@
 ## Core Features:
 
 - **Modular KPI Dashboards:**
+  - **Total Overview (Compendium):**
+    - **Executive Summary:** Aggregates critical metrics from all other modules into a single view.
+    - **NC Trends:** Displays quarterly Non-conformance risk/volume and reoccurrence trends (Current & Previous Year).
+    - **Unified Overdue Chart:** Compares overdue items across CAPA (Execution & Effectiveness), Change Actions, and Training.
+    - **Team Filtering:** "Production Only" filter applies to all overdue metrics.
   - **CAPA (Corrective and Preventive Actions):**
     - Import CAPA data from CSV/TSV files with robust, flexible parsing.
     - Automatically calculate overdue CAPAs based on 'Due Date' and 'Deadline for effectiveness check', with phase-aware logic.
@@ -29,8 +34,8 @@
     - Dashboard featuring "Glassmorphism" design for high visual impact.
     - Top-level stats for Total Assignments, Completion Rate (Radial Chart), and Overdue List.
     - "Training Overview" bar chart showing completed vs. pending training per trainee.
-    - "Process Overview" pie chart showing the breakdown of training categories.
-    - Detailed "Comprehensive List" table with status badges (Completed, WIP, Overdue) and tooltips for pending steps. Should be able to be filtered based on "Overdue"
+    - "Department Vibe Check" pie chart showing the breakdown of training categories.
+    - Detailed "Call Out List" table with status badges (Slay, WIP, Late!) and tooltips for pending steps.
     
 - **Centralized Settings:**
   - A dedicated "Settings" tab to manage application-wide configurations.
@@ -46,10 +51,17 @@
 
 - Primary color: Deep blue (#3F51B5) to convey trust and stability, fitting for professional data visualization.
 - Background color: Light grey (#ECEFF1), subtly tinted blue, to maintain focus on the data.
-
 - Accent color: Soft orange (#FFAB40) for highlighting overdue CAPAs, drawing attention without overwhelming.
 - Body and headline font: 'Inter', a sans-serif, will be used for all text. This is suitable for all headlines and body text
 - Use simple, geometric icons to represent different aspects of KPI data.
 - A clean, card-based layout to present KPIs and data points in an organized manner.
 - Subtle animations to show loading states and transitions, improving user experience without being distracting.
 - Glassmorphism effects used in the Training dashboard and Settings page for a modern, polished look.
+The color palettes should be like this:
+Light: (Clean White/Blue/Gold)
+
+Dark: (High Contrast Navy/White)
+
+Rose: (Soft Blush/Hot Pink/Ink Black/Rose gold)
+
+Slate: (Muted Grey/Indigo/Gunmetal)
