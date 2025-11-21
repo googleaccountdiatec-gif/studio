@@ -137,7 +137,7 @@ export default function TrainingDashboard() {
       accessorKey: 'status', 
       header: 'Status', 
       cell: (row) => {
-        if (row.status === 'Completed') return <Badge className="bg-teal-500 hover:bg-teal-600 text-white">Slay</Badge>;
+        if (row.status === 'Completed') return <Badge className="bg-teal-500 hover:bg-teal-600 text-white">Completed</Badge>;
         if (row.status === 'Overdue') return <Badge variant="destructive">Late!</Badge>;
         
         return (
