@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import CapaDashboard from '@/components/capa-dashboard';
 import ChangeActionDashboard from "@/components/change-action-dashboard";
 import NonConformanceDashboard from "@/components/non-conformance-dashboard";
+import TrainingDashboard from "@/components/training-dashboard";
 import SettingsPage from "@/components/settings-page";
 import { MultiUploader } from "@/components/multi-uploader";
 
@@ -22,6 +23,7 @@ export default function Home() {
               <TabsTrigger value="capa">CAPA</TabsTrigger>
               <TabsTrigger value="change-action">Change Action</TabsTrigger>
               <TabsTrigger value="non-conformance">Non-conformance</TabsTrigger>
+              <TabsTrigger value="training">Training</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
 
@@ -33,6 +35,9 @@ export default function Home() {
             </TabsContent>
             <TabsContent value="non-conformance">
                <NonConformanceDashboard />
+            </TabsContent>
+            <TabsContent value="training">
+               <TrainingDashboard />
             </TabsContent>
             <TabsContent value="settings">
               <SettingsPage />

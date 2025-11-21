@@ -36,16 +36,17 @@ const parseCustomCSV = (text: string): string[][] => {
   return rows.filter(row => row.length > 1 || (row.length === 1 && row[0] !== ''));
 };
 
-const fileIdentifier = (filename: string): 'capa' | 'change-action' | 'non-conformance' | 'unknown' => {
+const fileIdentifier = (filename: string): 'capa' | 'change-action' | 'non-conformance' | 'training' | 'unknown' => {
   const lowerFilename = filename.toLowerCase();
   if (lowerFilename.startsWith('capa')) return 'capa';
   if (lowerFilename.startsWith('change - actions required')) return 'change-action';
   if (lowerFilename.startsWith('non-conformance kpis')) return 'non-conformance';
+  if (lowerFilename.startsWith('training kpi')) return 'training';
   return 'unknown';
 }
 
 export function MultiUploader() {
-  const { setCapaData, setChangeActionData, setNonConformanceData } = useData();
+  const { setCapaData, setChangeActionData, setNonConformanceData, setTrainingData } = useData();
   const { toast } = useToast();
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -79,6 +80,7 @@ export function MultiUploader() {
             case 'capa': setCapaData(data); break;
             case 'change-action': setChangeActionData(data); break;
             case 'non-conformance': setNonConformanceData(data); break;
+            case 'training': setTrainingData(data); break;
           }
           successCount++;
           if(successCount === files.length) {
