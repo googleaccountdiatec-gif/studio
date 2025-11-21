@@ -232,7 +232,7 @@ export default function TrainingDashboard() {
                     <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0} />
                     <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
                     <Legend />
-                    <Bar dataKey="completed" name="Completed" stackId="a" fill="hsl(var(--chart-1))" />
+                    <Bar dataKey="completed" name="Completed" stackId="a" fill="hsl(var(--chart-5))" />
                     <Bar dataKey="pending" name="Pending" stackId="a" fill="hsl(var(--chart-2))" />
                     <Bar dataKey="overdue" name="Overdue" stackId="a" fill="hsl(var(--destructive))" radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -240,7 +240,7 @@ export default function TrainingDashboard() {
         </GlassCard>
 
         <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Department Vibe Check</h3>
+            <h3 className="text-lg font-semibold mb-4">Process Overview</h3>
             <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                     <Pie
