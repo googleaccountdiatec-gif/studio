@@ -1,48 +1,42 @@
-"use client"
+'use client';
 
-import * as React from "react"
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts"
+import * as React from 'react';
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
+import { cn } from "@/lib/utils"
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-} from "@/components/ui/chart"
-import type { ChartConfig } from "@/components/ui/chart"
+} from '@/components/ui/chart';
+import type { ChartConfig } from '@/components/ui/chart';
 
 interface CapaChartProps {
   data: { name: string; [key: string]: any }[];
   title: string;
   dataKey: string;
   onBarClick?: (name: string) => void;
+  className?: string;
 }
 
-export function CapaChart({ data, title, dataKey, onBarClick }: CapaChartProps) {
+export function CapaChart({ data, title, dataKey, onBarClick, className }: CapaChartProps) {
   const chartConfig = {
     [dataKey]: {
       label: dataKey.charAt(0).toUpperCase() + dataKey.slice(1),
-      color: "hsl(var(--primary))",
+      color: 'hsl(var(--primary))',
     },
-  } satisfies ChartConfig
+  } satisfies ChartConfig;
 
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ChartContainer config={chartConfig} className="h-[350px] w-full">
+    <div className={cn("w-full h-full flex flex-col", className)}>
+       {title && <h3 className="text-lg font-semibold mb-4">{title}</h3>}
+        <ChartContainer config={chartConfig} className="flex-1 w-full min-h-0">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart 
-              accessibilityLayer 
+            <BarChart
+              accessibilityLayer
               data={data}
               onClick={(e) => e && onBarClick && onBarClick(e.activeLabel as string)}
+              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
             >
               <XAxis
                 dataKey="name"
@@ -67,12 +61,11 @@ export function CapaChart({ data, title, dataKey, onBarClick }: CapaChartProps) 
                 dataKey={dataKey}
                 fill={`var(--color-${dataKey})`}
                 radius={[4, 4, 0, 0]}
-                cursor={onBarClick ? "pointer" : "default"}
+                cursor={onBarClick ? 'pointer' : 'default'}
               />
             </BarChart>
           </ResponsiveContainer>
         </ChartContainer>
-      </CardContent>
-    </Card>
-  )
+    </div>
+  );
 }

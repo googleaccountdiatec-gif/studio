@@ -5,7 +5,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileUp, AlertTriangle, ListTodo } from 'lucide-react';
 import { format, isAfter, parse, isValid, startOfDay, startOfMonth } from 'date-fns';
-import { KpiCard } from './kpi-card';
 import { CapaChart } from './capa-chart';
 import { Skeleton } from './ui/skeleton';
 import { DataTable, DataTableColumn } from './data-table';
@@ -16,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useData } from '@/contexts/data-context';
+import { GlassCard } from '@/components/ui/glass-card';
 
 interface ChangeActionData {
   'Change_ActionID': string;
@@ -32,20 +32,10 @@ interface ChangeActionData {
 }
 
 const DATE_FORMATS = [
-  // European formats with AM/PM (Fixes your "missing registrations" issue)
-  'dd/MM/yyyy hh:mm a',
-  'dd.MM.yyyy hh:mm a',
-  
-  // European formats 24-hour
   'dd/MM/yyyy HH:mm',
   'dd.MM.yyyy HH:mm',
-  
-  // Standard Dates (for Deadline)
   'dd/MM/yyyy',
   'dd.MM.yyyy',
-  'yyyy-MM-dd',
-  
-  // US Fallbacks
   'M/d/yyyy',
   'MM/dd/yyyy'
 ];
@@ -173,26 +163,58 @@ export default function ChangeActionDashboard() {
 
   const MainContent = () => (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <KpiCard title="Active Change Actions" value={kpiValues.totalCount} icon={ListTodo} />
-        <KpiCard title="Overdue Actions" value={kpiValues.overdueCount} icon={AlertTriangle} />
+      {/* Consolidated KPI Card */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <GlassCard className="p-6 flex flex-col justify-center lg:col-span-1">
+            <h3 className="text-lg font-semibold mb-6">Change Action Stats</h3>
+            <div className="space-y-6">
+                <div className="flex justify-between items-center border-b pb-4 border-border/50">
+                    <div className="flex flex-col">
+                        <span className="text-sm font-medium text-muted-foreground">Active Actions</span>
+                        <span className="text-xs text-muted-foreground">Total count</span>
+                    </div>
+                    <span className="text-3xl font-bold text-primary">{kpiValues.totalCount}</span>
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                    <div className="flex flex-col">
+                        <span className="text-sm font-medium text-foreground">Overdue Actions</span>
+                        <span className="text-xs text-muted-foreground">Action Required</span>
+                    </div>
+                    <span className={cn("text-4xl font-bold", kpiValues.overdueCount > 0 ? "text-destructive" : "text-emerald-500")}>
+                        {kpiValues.overdueCount}
+                    </span>
+                </div>
+            </div>
+        </GlassCard>
+
+        {/* Visualizations */}
+        <GlassCard className="lg:col-span-2 p-6">
+             <div className="h-[300px] w-full">
+                 <CapaChart data={monthlyRegistrationData} title="Monthly Registrations" dataKey="total" />
+            </div>
+        </GlassCard>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <CapaChart data={monthlyRegistrationData} title="Monthly Registrations" dataKey="total" />
-        <CapaChart 
-            data={actionsByChangeIdData} 
-            title="Actions by Change ID" 
-            dataKey="total"
-            onBarClick={setSelectedChangeId}
-        />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <GlassCard className="p-6 lg:col-span-2">
+             <div className="h-[350px] w-full">
+                <CapaChart 
+                    data={actionsByChangeIdData} 
+                    title="Actions by Change ID" 
+                    dataKey="total"
+                    onBarClick={setSelectedChangeId}
+                />
+            </div>
+        </GlassCard>
       </div>
+      
        <Card>
           <CardHeader>
               <CardTitle>Active Change Actions</CardTitle>
           </CardHeader>
           <CardContent>
               <DataTable 
-                  columns={columns}
+                  columns={columns} 
                   data={processedData}
                   getRowClassName={(row) => cn(row.isOverdue && "bg-accent/20 hover:bg-accent/30")}
               />
