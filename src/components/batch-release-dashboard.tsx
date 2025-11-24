@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
 import { parse, isValid, getMonth, getYear, format } from 'date-fns';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, LabelList } from 'recharts';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -210,15 +210,25 @@ export default function BatchReleaseDashboard() {
   const getChartBars = () => {
       if (yearFilter === 'default') {
           return [
-              <Bar key={previousYear} dataKey={previousYear} name={`${previousYear}`} fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />,
-              <Bar key={currentYear} dataKey={currentYear} name={`${currentYear}`} fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+              <Bar key={previousYear} dataKey={previousYear} name={`${previousYear}`} fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey={previousYear} position="top" fill="hsl(var(--foreground))" fontSize={10} formatter={(value: any) => value > 0 ? value : ''} />
+              </Bar>,
+              <Bar key={currentYear} dataKey={currentYear} name={`${currentYear}`} fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey={currentYear} position="top" fill="hsl(var(--foreground))" fontSize={10} formatter={(value: any) => value > 0 ? value : ''} />
+              </Bar>
           ];
       } else if (yearFilter === 'all') {
           return availableYears.map((year, index) => (
-              <Bar key={year} dataKey={year} name={`${year}`} fill={`hsl(var(--chart-${(index % 5) + 1}))`} radius={[4, 4, 0, 0]} />
+              <Bar key={year} dataKey={year} name={`${year}`} fill={`hsl(var(--chart-${(index % 5) + 1}))`} radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey={year} position="top" fill="hsl(var(--foreground))" fontSize={10} formatter={(value: any) => value > 0 ? value : ''} />
+              </Bar>
           ));
       } else {
-           return [<Bar key={yearFilter} dataKey={yearFilter} name={`${yearFilter}`} fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />];
+           return [
+               <Bar key={yearFilter} dataKey={yearFilter} name={`${yearFilter}`} fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]}>
+                   <LabelList dataKey={yearFilter} position="top" fill="hsl(var(--foreground))" fontSize={10} formatter={(value: any) => value > 0 ? value : ''} />
+               </Bar>
+           ];
       }
   };
 
@@ -306,7 +316,7 @@ export default function BatchReleaseDashboard() {
       {/* Visualizations */}
       <div className="grid gap-6 lg:grid-cols-3">
         <GlassCard className="lg:col-span-2 p-6">
-            <h3 className="text-lg font-semibold mb-4">Monthly Approved Batches (YoY)</h3>
+            <h3 className="text-lg font-semibold mb-4">Monthly Approved Batches</h3>
             <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={monthlyChartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
