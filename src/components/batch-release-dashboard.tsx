@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
-import { parse, isValid, getMonth, getYear, getQuarter, format } from 'date-fns';
+import { parse, isValid, getMonth, getYear, format } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,7 +60,7 @@ export default function BatchReleaseDashboard() {
   const [prodTypeFilter, setProdTypeFilter] = useState<string>('all');
   const [cloneFilter, setCloneFilter] = useState<string>('');
   const [customerFilter, setCustomerFilter] = useState<string>('');
-  const [quarterFilter, setQuarterFilter] = useState<string>('all');
+  const [yearFilter, setYearFilter] = useState<string>('default');
 
   const processedData = useMemo(() => {
     return batchReleaseData
@@ -96,7 +96,21 @@ export default function BatchReleaseDashboard() {
     });
   }, [processedData, prodTypeFilter, cloneFilter, customerFilter]);
 
-  // Extract unique active clones and customers for display
+  // Available years in the filtered dataset
+  const availableYears = useMemo(() => {
+    const years = new Set(filteredData.map(item => getYear(item.completedDate)));
+    return Array.from(years).sort((a, b) => b - a);
+  }, [filteredData]);
+
+  // Determine current/previous years based on data
+  const { currentYear, previousYear } = useMemo(() => {
+      if (availableYears.length === 0) return { currentYear: new Date().getFullYear(), previousYear: new Date().getFullYear() - 1 };
+      const max = Math.max(...availableYears);
+      return { currentYear: max, previousYear: max - 1 };
+  }, [availableYears]);
+
+
+  // Active Filters Display
   const activeFilters = useMemo(() => {
     const clones = new Set<string>();
     const customers = new Set<string>();
@@ -113,46 +127,59 @@ export default function BatchReleaseDashboard() {
   }, [filteredData]);
 
 
-  // --- Visualization 1: Monthly Approved Batches (YoY) ---
+  // --- Visualization 1: Monthly Approved Batches ---
   const monthlyChartData = useMemo(() => {
-    if (filteredData.length === 0) return { data: [], currentYear: new Date().getFullYear(), previousYear: new Date().getFullYear() - 1 };
-
-    // Determine "Current Year" from the data, not the calendar
-    const years = filteredData.map(d => getYear(d.completedDate));
-    const currentYear = Math.max(...years);
-    const previousYear = currentYear - 1;
-
     const months = Array.from({ length: 12 }, (_, i) => {
-      const date = new Date(currentYear, i, 1);
-      return {
+      const date = new Date(currentYear, i, 1); // Use currentYear for label context
+      const entry: any = {
         name: format(date, 'MMM'),
         monthIndex: i,
-        current: 0,
-        previous: 0
       };
+      // Initialize counts for relevant years based on filter
+      if (yearFilter === 'default') {
+          entry[currentYear] = 0;
+          entry[previousYear] = 0;
+      } else if (yearFilter === 'all') {
+          availableYears.forEach(y => entry[y] = 0);
+      } else {
+          entry[yearFilter] = 0;
+      }
+      return entry;
     });
 
     filteredData.forEach(item => {
       const year = getYear(item.completedDate);
       const month = getMonth(item.completedDate);
       
-      if (year === currentYear) {
-        months[month].current++;
-      } else if (year === previousYear) {
-        months[month].previous++;
+      if (yearFilter === 'default') {
+          if (year === currentYear || year === previousYear) {
+              months[month][year]++;
+          }
+      } else if (yearFilter === 'all') {
+          if (availableYears.includes(year)) {
+              months[month][year]++;
+          }
+      } else {
+          if (String(year) === yearFilter) {
+              months[month][year]++;
+          }
       }
     });
 
-    return { data: months, currentYear, previousYear };
-  }, [filteredData]);
+    return months;
+  }, [filteredData, yearFilter, availableYears, currentYear, previousYear]);
 
   // --- KPI Metrics: Average Non-Conformances ---
   const kpiMetrics = useMemo(() => {
-    const targetQuarter = quarterFilter === 'all' ? null : parseInt(quarterFilter);
-    
     const metricsData = filteredData.filter(item => {
-      if (targetQuarter === null) return true;
-      return getQuarter(item.completedDate) === targetQuarter;
+        const year = getYear(item.completedDate);
+        if (yearFilter === 'default') {
+            return year === currentYear || year === previousYear;
+        } else if (yearFilter === 'all') {
+            return true;
+        } else {
+            return String(year) === yearFilter;
+        }
     });
 
     const totalBatches = metricsData.length;
@@ -166,7 +193,7 @@ export default function BatchReleaseDashboard() {
       high: (totalHigh / totalBatches).toFixed(2),
       total: ((totalLow + totalHigh) / totalBatches).toFixed(2)
     };
-  }, [filteredData, quarterFilter]);
+  }, [filteredData, yearFilter, currentYear, previousYear]);
 
 
   if (batchReleaseData.length === 0) {
@@ -178,6 +205,22 @@ export default function BatchReleaseDashboard() {
         </div>
     );
   }
+
+  // Helper to get chart bars based on filter
+  const getChartBars = () => {
+      if (yearFilter === 'default') {
+          return [
+              <Bar key={previousYear} dataKey={previousYear} name={`${previousYear}`} fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />,
+              <Bar key={currentYear} dataKey={currentYear} name={`${currentYear}`} fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+          ];
+      } else if (yearFilter === 'all') {
+          return availableYears.map((year, index) => (
+              <Bar key={year} dataKey={year} name={`${year}`} fill={`hsl(var(--chart-${(index % 5) + 1}))`} radius={[4, 4, 0, 0]} />
+          ));
+      } else {
+           return [<Bar key={yearFilter} dataKey={yearFilter} name={`${yearFilter}`} fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />];
+      }
+  };
 
   return (
     <div className="space-y-6">
@@ -215,17 +258,17 @@ export default function BatchReleaseDashboard() {
                 />
             </div>
              <div className="space-y-2">
-                <Label>Quarter (for KPIs)</Label>
-                <Select value={quarterFilter} onValueChange={setQuarterFilter}>
+                <Label>Period</Label>
+                <Select value={yearFilter} onValueChange={setYearFilter}>
                     <SelectTrigger>
-                        <SelectValue placeholder="All Year" />
+                        <SelectValue placeholder="Select Period" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">All Year</SelectItem>
-                        <SelectItem value="1">Q1</SelectItem>
-                        <SelectItem value="2">Q2</SelectItem>
-                        <SelectItem value="3">Q3</SelectItem>
-                        <SelectItem value="4">Q4</SelectItem>
+                        <SelectItem value="default">Current & Previous Year</SelectItem>
+                        <SelectItem value="all">All Time</SelectItem>
+                        {availableYears.map(year => (
+                            <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
             </div>
@@ -239,10 +282,10 @@ export default function BatchReleaseDashboard() {
                 {activeFilters.clones.length > 0 && (
                     <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">Clones:</span>
-                        {activeFilters.clones.slice(0, 10).map(clone => (
+                        {activeFilters.clones.slice(0, 15).map(clone => (
                             <Badge key={clone} variant="secondary">{clone}</Badge>
                         ))}
-                        {activeFilters.clones.length > 10 && <span className="text-xs text-muted-foreground">+{activeFilters.clones.length - 10} more</span>}
+                        {activeFilters.clones.length > 15 && <span className="text-xs text-muted-foreground">+{activeFilters.clones.length - 15} more</span>}
                     </div>
                 )}
             </div>
@@ -250,10 +293,10 @@ export default function BatchReleaseDashboard() {
                 {activeFilters.customers.length > 0 && (
                     <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">Customers:</span>
-                        {activeFilters.customers.slice(0, 10).map(customer => (
+                        {activeFilters.customers.slice(0, 15).map(customer => (
                             <Badge key={customer} variant="outline">{customer}</Badge>
                         ))}
-                        {activeFilters.customers.length > 10 && <span className="text-xs text-muted-foreground">+{activeFilters.customers.length - 10} more</span>}
+                        {activeFilters.customers.length > 15 && <span className="text-xs text-muted-foreground">+{activeFilters.customers.length - 15} more</span>}
                     </div>
                 )}
             </div>
@@ -265,14 +308,13 @@ export default function BatchReleaseDashboard() {
         <GlassCard className="lg:col-span-2 p-6">
             <h3 className="text-lg font-semibold mb-4">Monthly Approved Batches (YoY)</h3>
             <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={monthlyChartData.data} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <BarChart data={monthlyChartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" />
                     <YAxis />
                     <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
                     <Legend />
-                    <Bar dataKey="previous" name={`${monthlyChartData.previousYear}`} fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="current" name={`${monthlyChartData.currentYear}`} fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+                    {getChartBars()}
                 </BarChart>
             </ResponsiveContainer>
         </GlassCard>
