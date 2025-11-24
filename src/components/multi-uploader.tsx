@@ -1,10 +1,12 @@
 "use client";
 
-import React, { ChangeEvent } from 'react';
+import React, { ChangeEvent, useState, DragEvent } from 'react';
 import { useData } from '@/contexts/data-context';
 import { useToast } from "@/hooks/use-toast";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { UploadCloud } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // Re-using the parsers. Ideally, these would be in a central `lib/parsers.ts` file.
 const parseCustomCSV = (text: string): string[][] => {
@@ -49,9 +51,9 @@ const fileIdentifier = (filename: string): 'capa' | 'change-action' | 'non-confo
 export function MultiUploader() {
   const { setCapaData, setChangeActionData, setNonConformanceData, setTrainingData, setBatchReleaseData } = useData();
   const { toast } = useToast();
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
+  const processFiles = (files: FileList) => {
     if (!files || files.length === 0) return;
 
     let successCount = 0;
@@ -96,20 +98,61 @@ export function MultiUploader() {
       };
       reader.readAsText(file, 'latin1');
     });
+  };
 
-    event.target.value = '';
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      processFiles(event.target.files);
+      event.target.value = '';
+    }
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files) {
+      processFiles(e.dataTransfer.files);
+    }
   };
 
   return (
-    <div className='flex items-center gap-2 ml-auto'>
-        <Label htmlFor="multi-csv-upload" className="sr-only">Upload Files</Label>
+    <div 
+        className={cn(
+            "flex items-center gap-2 ml-auto relative transition-all duration-200",
+            isDragging && "scale-105"
+        )}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+    >
+        <Label 
+            htmlFor="multi-csv-upload" 
+            className={cn(
+                "flex items-center justify-center gap-2 px-4 py-2 rounded-lg border cursor-pointer text-sm font-medium transition-colors",
+                "bg-primary/10 text-primary hover:bg-primary/20 border-primary/20",
+                isDragging && "bg-primary/30 border-primary ring-2 ring-primary/50"
+            )}
+        >
+            <UploadCloud className="h-4 w-4" />
+            {isDragging ? "Drop files here!" : "Upload Files"}
+        </Label>
         <Input 
             id="multi-csv-upload" 
             type="file" 
             accept=".csv,.tsv,.txt" 
-            onChange={handleFileUpload}
+            onChange={handleFileChange}
             multiple
-            className="w-full max-w-[150px] sm:max-w-xs text-sm file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" 
+            className="hidden" 
         />
     </div>
   );
