@@ -187,17 +187,22 @@ export default function ChangeActionDashboard() {
             </div>
         </GlassCard>
 
-        {/* Visualizations */}
+        {/* Visualizations - Row 1 */}
         <GlassCard className="lg:col-span-2 p-6">
-             <div className="h-[300px] w-full">
+             {/* BESTIE EDIT: Dropped from 300px to 220px. 
+                 This is sleek, panoramic, and doesn't hoard screen space. */}
+             <div className="h-[220px] w-full">
                  <CapaChart data={monthlyRegistrationData} title="Monthly Registrations" dataKey="total" />
             </div>
         </GlassCard>
       </div>
 
+      {/* Visualizations - Row 2 */}
       <div className="grid gap-6 lg:grid-cols-2">
         <GlassCard className="p-6 lg:col-span-2">
-             <div className="h-[350px] w-full">
+             {/* BESTIE EDIT: Dropped from 350px to 250px. 
+                 Still your "main event", but leaves room for the table below. */}
+             <div className="h-[250px] w-full">
                 <CapaChart 
                     data={actionsByChangeIdData} 
                     title="Actions by Change ID" 

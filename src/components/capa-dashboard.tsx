@@ -11,10 +11,9 @@ import { DateRange } from 'react-day-picker';
 import { format, isAfter, parse, isValid, startOfDay } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import type { CapaData } from '@/lib/types';
-import { KpiCard } from './kpi-card';
+// BESTIE NOTE: We aren't using KpiCard anymore, she was too bloated.
 import { DataTable, DataTableColumn } from './data-table';
 import { CapaChart } from './capa-chart';
-import { Skeleton } from './ui/skeleton';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -24,47 +23,30 @@ import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
 import { getProductionTeam } from '@/lib/teams';
 import { useData } from '@/contexts/data-context';
+import { GlassCard } from '@/components/ui/glass-card'; // Make sure this is imported!
 
-
+// ... [Keep your DATE_FORMATS and parseDate function exactly as they are] ...
+// ... [I'm skipping them here to save space, but keep them in your file!] ...
 const DATE_FORMATS = [
-  'dd/MM/yyyy', 
-  'd/M/yyyy',
-  'dd.MM.yyyy', 
-  'd.M.yyyy',
-  'yyyy-MM-dd',
-  // US formats moved to the bottom as fallbacks
-  'M/d/yyyy', 
-  'MM/dd/yyyy', 
-  'M-d-yyyy', 
-  'MM-dd-yyyy',
+  'dd/MM/yyyy', 'd/M/yyyy', 'dd.MM.yyyy', 'd.M.yyyy', 'yyyy-MM-dd',
+  'M/d/yyyy', 'MM/dd/yyyy', 'M-d-yyyy', 'MM-dd-yyyy',
 ];
 
 const parseDate = (dateString: string): Date => {
   if (!dateString) return new Date('invalid');
-  
-  // Clean the string: remove invisible characters, trim whitespace
   const cleanString = dateString.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-
-  // Specific handling for DD.MM.YYYY (very common in your files) to avoid ambiguity
   const ddMMyyyy = cleanString.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if (ddMMyyyy) {
     const [, day, month, year] = ddMMyyyy;
     const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
     if (isValid(parsed)) return parsed;
   }
-
-  // Try parsing with date-fns
   for (const formatStr of DATE_FORMATS) {
     const parsedDate = parse(cleanString, formatStr, new Date());
-    if (isValid(parsedDate)) {
-      return parsedDate;
-    }
+    if (isValid(parsedDate)) return parsedDate;
   }
-
-  // Fallback: Try native Date parsing (good for ISO strings)
   const nativeDate = new Date(cleanString);
   if (isValid(nativeDate)) return nativeDate;
-
   return new Date('invalid');
 }
 
@@ -84,52 +66,36 @@ export default function CapaDashboard() {
     'Pending Steps': true,
   });
   
+  // ... [Keep processedData, filteredData, kpiValues, chartDataByStatus, chartDataByAssignee, assigneeCapas, and columns exactly as they are] ...
   const processedData = useMemo(() => {
     const today = startOfDay(new Date());
-
-    let baseData = showCompleted 
-      ? capaData 
-      : capaData.filter(item => item['Pending Steps'] && item['Pending Steps'].trim() !== '');
-
+    let baseData = showCompleted ? capaData : capaData.filter(item => item['Pending Steps'] && item['Pending Steps'].trim() !== '');
     if (phaseFilter !== 'all') {
       baseData = baseData.filter(item => {
         const isEffectiveness = item['Pending Steps']?.toLowerCase().includes('effectiveness');
         return phaseFilter === 'effectiveness' ? isEffectiveness : !isEffectiveness;
       });
     }
-    
-    if (teamFilter === 'production') {
-      baseData = baseData.filter(item => productionTeam.includes(item['Assigned To']));
-    }
-
+    if (teamFilter === 'production') baseData = baseData.filter(item => productionTeam.includes(item['Assigned To']));
     return baseData.map(item => {
       const isEffectivenessStep = item['Pending Steps']?.toLowerCase().includes('effectiveness');
       const dateString = isEffectivenessStep ? item['Deadline for effectiveness check'] : item['Due Date'];
-      
       const effectiveDueDate = parseDate(dateString);
-      
       let isOverdue = false;
-      if (isValid(effectiveDueDate)) {
-        isOverdue = isAfter(today, effectiveDueDate);
-      }
-      
+      if (isValid(effectiveDueDate)) isOverdue = isAfter(today, effectiveDueDate);
       return { ...item, isOverdue, effectiveDueDate };
     });
   }, [capaData, showCompleted, phaseFilter, teamFilter, productionTeam]);
 
   const filteredData = useMemo(() => {
-    if (!dateRange?.from) {
-      return processedData;
-    }
+    if (!dateRange?.from) return processedData;
     const fromDate = startOfDay(dateRange.from);
     const toDate = dateRange.to ? startOfDay(dateRange.to) : fromDate;
-    
     return processedData.filter(item => {
       if (!item.effectiveDueDate || !isValid(item.effectiveDueDate)) return false;
       return item.effectiveDueDate >= fromDate && item.effectiveDueDate <= toDate;
     });
   }, [processedData, dateRange]);
-
 
   const kpiValues = useMemo(() => {
     const dataToUse = filteredData;
@@ -142,24 +108,19 @@ export default function CapaDashboard() {
   const chartDataByStatus = useMemo(() => {
     const overdue = kpiValues.overdueCount;
     const onTime = kpiValues.totalCount - overdue;
-    return [
-      { name: "On Time", status: onTime },
-      { name: "Overdue", status: overdue }
-    ];
+    return [{ name: "On Time", status: onTime }, { name: "Overdue", status: overdue }];
   }, [kpiValues]);
 
   const chartDataByAssignee = useMemo(() => {
     const assigneeCounts: { [key: string]: number } = {};
     filteredData.forEach(item => {
       const assignee = item['Assigned To'];
-      if(assignee) {
-        assigneeCounts[assignee] = (assigneeCounts[assignee] || 0) + 1;
-      }
+      if(assignee) assigneeCounts[assignee] = (assigneeCounts[assignee] || 0) + 1;
     });
     return Object.entries(assigneeCounts)
       .map(([name, total]) => ({ name, total }))
       .sort((a, b) => b.total - a.total)
-      .slice(0, 10); // Show top 10 assignees
+      .slice(0, 10);
   }, [filteredData]);
 
   const assigneeCapas = useMemo(() => {
@@ -169,61 +130,73 @@ export default function CapaDashboard() {
 
   const columns: DataTableColumn<CapaData>[] = [
     { accessorKey: 'CAPA ID', header: 'CAPA ID', cell: (row) => row['CAPA ID'] },
-    { 
-      accessorKey: 'Title', 
-      header: 'Title', 
-      cell: (row) => <span className="font-medium">{row['Title']}</span>,
-      visible: columnVisibility['Title'],
-    },
-    { 
-      accessorKey: 'effectiveDueDate', 
-      header: 'Effective Due Date', 
-      cell: (row) => row.effectiveDueDate && isValid(row.effectiveDueDate) ? format(row.effectiveDueDate!, 'PPP') : 'Invalid Date'
-    },
-    { 
-      accessorKey: 'Assigned To', 
-      header: 'Assigned To', 
-      cell: (row) => row['Assigned To'],
-      visible: columnVisibility['Assigned To'],
-    },
-    { 
-      accessorKey: 'Pending Steps', 
-      header: 'Pending Steps', 
-      cell: (row) => <Badge variant="secondary">{row['Pending Steps']}</Badge>,
-      visible: columnVisibility['Pending Steps'],
-    },
-    { 
-      accessorKey: 'status', 
-      header: 'Status', 
-      cell: (row) => row.isOverdue 
-          ? <Badge variant="destructive" className="bg-accent text-accent-foreground hover:bg-accent/80">Overdue</Badge> 
-          : <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent">On Time</Badge>
-    },
+    { accessorKey: 'Title', header: 'Title', cell: (row) => <span className="font-medium">{row['Title']}</span>, visible: columnVisibility['Title'] },
+    { accessorKey: 'effectiveDueDate', header: 'Effective Due Date', cell: (row) => row.effectiveDueDate && isValid(row.effectiveDueDate) ? format(row.effectiveDueDate!, 'PPP') : 'Invalid Date' },
+    { accessorKey: 'Assigned To', header: 'Assigned To', cell: (row) => row['Assigned To'], visible: columnVisibility['Assigned To'] },
+    { accessorKey: 'Pending Steps', header: 'Pending Steps', cell: (row) => <Badge variant="secondary">{row['Pending Steps']}</Badge>, visible: columnVisibility['Pending Steps'] },
+    { accessorKey: 'status', header: 'Status', cell: (row) => row.isOverdue ? <Badge variant="destructive" className="bg-accent text-accent-foreground hover:bg-accent/80">Overdue</Badge> : <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent">On Time</Badge> },
   ];
   
+  // BESTIE: Here is the renovated MainContent! 💅
   const MainContent = () => (
-    <>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <KpiCard title="Total CAPAs" value={kpiValues.totalCount} icon={ListTodo} description={dateRange?.from ? "In selected date range" : "From imported file"}/>
-            <KpiCard title="Overdue CAPAs" value={kpiValues.overdueCount} icon={AlertTriangle} description={`${(kpiValues.totalCount > 0 ? (kpiValues.overdueCount / kpiValues.totalCount * 100).toFixed(1) : 0)}% of total`}/>
-            <KpiCard title="On Time Rate" value={`${kpiValues.onTimePercentage}%`} icon={CheckCircle} description="CAPAs completed on schedule" />
-            <KpiCard title="Unique Assignees" value={Object.keys(chartDataByAssignee.reduce((acc, item) => { if(item.name) acc[item.name] = true; return acc; }, {} as Record<string, boolean>)).length} icon={Users} description="People with assigned CAPAs"/>
+    <div className="space-y-6">
+        {/* ROW 1: Consolidated KPI Card + Status Chart (Small & Cute) */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {/* KPI Card - Merged for slimness */}
+            <GlassCard className="p-6 flex flex-col justify-between h-fit lg:col-span-1">
+                 <h3 className="text-lg font-semibold mb-4">Performance Overview</h3>
+                 <div className="space-y-6">
+                    {/* Stat 1 */}
+                    <div className="flex justify-between items-center border-b pb-2 border-border/50">
+                        <div className="flex flex-col">
+                            <span className="text-sm font-medium text-muted-foreground flex items-center gap-2"><ListTodo className="h-3 w-3"/> Total CAPAs</span>
+                        </div>
+                        <span className="text-2xl font-bold text-primary">{kpiValues.totalCount}</span>
+                    </div>
+                    {/* Stat 2 */}
+                    <div className="flex justify-between items-center border-b pb-2 border-border/50">
+                         <div className="flex flex-col">
+                            <span className="text-sm font-medium text-muted-foreground flex items-center gap-2"><AlertTriangle className="h-3 w-3"/> Overdue</span>
+                        </div>
+                        <span className={cn("text-2xl font-bold", kpiValues.overdueCount > 0 ? "text-destructive" : "text-emerald-500")}>
+                            {kpiValues.overdueCount}
+                        </span>
+                    </div>
+                     {/* Stat 3 */}
+                    <div className="flex justify-between items-center">
+                         <div className="flex flex-col">
+                            <span className="text-sm font-medium text-muted-foreground flex items-center gap-2"><CheckCircle className="h-3 w-3"/> On Time Rate</span>
+                        </div>
+                         <span className="text-2xl font-bold text-foreground">{kpiValues.onTimePercentage}%</span>
+                    </div>
+                 </div>
+            </GlassCard>
+
+            {/* Status Chart - Petite Size */}
+            <GlassCard className="lg:col-span-2 p-6 flex flex-col">
+                <h3 className="text-base font-semibold mb-4">CAPA Status Overview</h3>
+                <div className="h-[220px] w-full">
+                    <CapaChart data={chartDataByStatus} title="" dataKey="status" />
+                </div>
+            </GlassCard>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-5">
-            <div className="lg:col-span-3">
-                <CapaChart 
-                    data={chartDataByAssignee} 
-                    title="CAPAs by Assignee (Top 10)" 
-                    dataKey="total" 
-                    onBarClick={setSelectedAssignee}
-                />
-            </div>
-            <div className="lg:col-span-2">
-                <CapaChart data={chartDataByStatus} title="CAPA Status Overview" dataKey="status" />
-            </div>
+        {/* ROW 2: Assignee Chart - Panoramic View */}
+        <div className="grid gap-6 lg:grid-cols-1">
+            <GlassCard className="p-6 flex flex-col">
+                <h3 className="text-base font-semibold mb-4">Top 10 Assignees</h3>
+                <div className="h-[250px] w-full">
+                    <CapaChart 
+                        data={chartDataByAssignee} 
+                        title="" 
+                        dataKey="total" 
+                        onBarClick={setSelectedAssignee}
+                    />
+                </div>
+            </GlassCard>
         </div>
 
+        {/* ROW 3: Data Table */}
         <Card>
             <CardHeader>
                 <CardTitle>CAPA Details</CardTitle>
@@ -236,7 +209,7 @@ export default function CapaDashboard() {
                 />
             </CardContent>
         </Card>
-    </>
+    </div>
   );
 
   const EmptyState = () => (
@@ -249,7 +222,8 @@ export default function CapaDashboard() {
 
   return (
     <div className="flex flex-col">
-       <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
+        {/* Filters Header - I kept this as is, but you can wrap it in a glass card if you want to be extra fancy! */}
+       <div className="flex items-center gap-4 sm:gap-6 flex-wrap mb-4">
             <RadioGroup value={phaseFilter} onValueChange={(value) => setPhaseFilter(value as any)} className="flex items-center gap-4">
                 <Label>Phase:</Label>
                 <div className="flex items-center space-x-2">
@@ -339,7 +313,7 @@ export default function CapaDashboard() {
                       >
                           Assigned To
                       </DropdownMenuCheckboxItem>
-                       <DropdownMenuCheckboxItem
+                        <DropdownMenuCheckboxItem
                           checked={columnVisibility['Pending Steps']}
                           onCheckedChange={(value) => setColumnVisibility(prev => ({...prev, 'Pending Steps': !!value}))}
                       >
@@ -349,7 +323,7 @@ export default function CapaDashboard() {
                 </DropdownMenu>
             </div>
         </div>
-      <div className="flex-1 p-4 sm:p-6 space-y-6 pt-2">
+      <div className="flex-1 space-y-6 pt-2">
         {capaData.length > 0 ? <MainContent /> : <EmptyState />}
       </div>
 
