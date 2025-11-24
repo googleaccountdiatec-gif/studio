@@ -32,10 +32,20 @@ interface ChangeActionData {
 }
 
 const DATE_FORMATS = [
+  // European formats with AM/PM (Fixes your "missing registrations" issue)
+  'dd/MM/yyyy hh:mm a',
+  'dd.MM.yyyy hh:mm a',
+  
+  // European formats 24-hour
   'dd/MM/yyyy HH:mm',
   'dd.MM.yyyy HH:mm',
+  
+  // Standard Dates (for Deadline)
   'dd/MM/yyyy',
   'dd.MM.yyyy',
+  'yyyy-MM-dd',
+  
+  // US Fallbacks
   'M/d/yyyy',
   'MM/dd/yyyy'
 ];

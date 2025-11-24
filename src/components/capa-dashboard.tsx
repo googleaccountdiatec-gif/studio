@@ -3,8 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Calendar as CalendarIcon, FileUp, Users, AlertTriangle, CheckCircle, ListTodo, Columns, Sparkles } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Calendar as CalendarIcon, FileUp, Users, AlertTriangle, CheckCircle, ListTodo, Columns } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
@@ -20,7 +20,6 @@ import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { summarizeCapas } from '@/ai/flows/summarize-capas-flow';
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
 import { getProductionTeam } from '@/lib/teams';
@@ -72,12 +71,10 @@ const parseDate = (dateString: string): Date => {
 export default function CapaDashboard() {
   const { capaData } = useData();
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [isSummarizing, setIsSummarizing] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [phaseFilter, setPhaseFilter] = useState<'all' | 'execution' | 'effectiveness'>('all');
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const [selectedAssignee, setSelectedAssignee] = useState<string | null>(null);
-  const [summary, setSummary] = useState<string | null>(null);
   const { toast } = useToast();
   const productionTeam = getProductionTeam();
 
@@ -87,24 +84,6 @@ export default function CapaDashboard() {
     'Pending Steps': true,
   });
   
-  const handleSummarize = async () => {
-    setIsSummarizing(true);
-    setSummary(null);
-    try {
-      const result = await summarizeCapas(filteredData);
-      setSummary(result.summary);
-    } catch (error) {
-      console.error("Error summarizing CAPA data:", error);
-      toast({
-        variant: "destructive",
-        title: "AI Summarization Error",
-        description: "There was an error generating the summary.",
-      });
-    } finally {
-      setIsSummarizing(false);
-    }
-  };
-
   const processedData = useMemo(() => {
     const today = startOfDay(new Date());
 
@@ -224,30 +203,6 @@ export default function CapaDashboard() {
   
   const MainContent = () => (
     <>
-        {(isSummarizing || summary) && (
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Sparkles className="text-primary" />
-                        AI Summary
-                    </CardTitle>
-                    <CardDescription>
-                        An AI-generated overview of the current CAPA data.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {isSummarizing ? (
-                        <div className="space-y-2">
-                            <Skeleton className="h-4 w-full" />
-                            <Skeleton className="h-4 w-full" />
-                            <Skeleton className="h-4 w-3/4" />
-                        </div>
-                    ) : (
-                        <p className="text-sm">{summary}</p>
-                    )}
-                </CardContent>
-            </Card>
-        )}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <KpiCard title="Total CAPAs" value={kpiValues.totalCount} icon={ListTodo} description={dateRange?.from ? "In selected date range" : "From imported file"}/>
             <KpiCard title="Overdue CAPAs" value={kpiValues.overdueCount} icon={AlertTriangle} description={`${(kpiValues.totalCount > 0 ? (kpiValues.overdueCount / kpiValues.totalCount * 100).toFixed(1) : 0)}% of total`}/>
@@ -333,15 +288,6 @@ export default function CapaDashboard() {
             </div>
 
             <div className='flex items-center gap-2 ml-auto'>
-                <Button
-                    variant="outline"
-                    onClick={handleSummarize}
-                    disabled={isSummarizing || capaData.length === 0}
-                >
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    {isSummarizing ? "Summarizing..." : "Summarize with AI"}
-                </Button>
-
                 <Popover>
                     <PopoverTrigger asChild>
                         <Button
