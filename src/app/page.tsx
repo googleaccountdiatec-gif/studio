@@ -5,6 +5,7 @@ import CapaDashboard from '@/components/capa-dashboard';
 import ChangeActionDashboard from "@/components/change-action-dashboard";
 import NonConformanceDashboard from "@/components/non-conformance-dashboard";
 import TrainingDashboard from "@/components/training-dashboard";
+import BatchReleaseDashboard from "@/components/batch-release-dashboard";
 import CompendiumDashboard from "@/components/compendium-dashboard";
 import SettingsPage from "@/components/settings-page";
 import { MultiUploader } from "@/components/multi-uploader";
@@ -22,6 +23,7 @@ export default function Home() {
           <Tabs defaultValue="overview">
             <TabsList>
               <TabsTrigger value="overview">Total Overview</TabsTrigger>
+              <TabsTrigger value="batch-release">Batch Release</TabsTrigger>
               <TabsTrigger value="capa">CAPA</TabsTrigger>
               <TabsTrigger value="change-action">Change Action</TabsTrigger>
               <TabsTrigger value="non-conformance">Non-conformance</TabsTrigger>
@@ -31,6 +33,9 @@ export default function Home() {
 
             <TabsContent value="overview">
               <CompendiumDashboard />
+            </TabsContent>
+            <TabsContent value="batch-release">
+              <BatchReleaseDashboard />
             </TabsContent>
             <TabsContent value="capa">
               <CapaDashboard />

@@ -36,17 +36,18 @@ const parseCustomCSV = (text: string): string[][] => {
   return rows.filter(row => row.length > 1 || (row.length === 1 && row[0] !== ''));
 };
 
-const fileIdentifier = (filename: string): 'capa' | 'change-action' | 'non-conformance' | 'training' | 'unknown' => {
+const fileIdentifier = (filename: string): 'capa' | 'change-action' | 'non-conformance' | 'training' | 'batch-release' | 'unknown' => {
   const lowerFilename = filename.toLowerCase();
   if (lowerFilename.startsWith('capa')) return 'capa';
   if (lowerFilename.startsWith('change - actions required')) return 'change-action';
   if (lowerFilename.startsWith('non-conformance kpis')) return 'non-conformance';
   if (lowerFilename.startsWith('training kpi')) return 'training';
+  if (lowerFilename.startsWith('batch release kpi')) return 'batch-release';
   return 'unknown';
 }
 
 export function MultiUploader() {
-  const { setCapaData, setChangeActionData, setNonConformanceData, setTrainingData } = useData();
+  const { setCapaData, setChangeActionData, setNonConformanceData, setTrainingData, setBatchReleaseData } = useData();
   const { toast } = useToast();
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -81,6 +82,7 @@ export function MultiUploader() {
             case 'change-action': setChangeActionData(data); break;
             case 'non-conformance': setNonConformanceData(data); break;
             case 'training': setTrainingData(data); break;
+            case 'batch-release': setBatchReleaseData(data); break;
           }
           successCount++;
           if(successCount === files.length) {

@@ -8,6 +8,11 @@
     - **NC Trends:** Displays quarterly Non-conformance risk/volume and reoccurrence trends (Current & Previous Year).
     - **Unified Overdue Chart:** Compares overdue items across CAPA (Execution & Effectiveness), Change Actions, and Training.
     - **Team Filtering:** "Production Only" filter applies to all overdue metrics.
+  - **Batch Release:**
+    - Import Batch Release KPI data from CSV files.
+    - Filter data by Production Type, Clone Name, Customer (including aliases), and Quarter.
+    - Interactive Year-over-Year (YoY) chart showing monthly approved batches.
+    - KPI cards displaying average Low Risk, High Risk, and Total Non-conformances per batch for the selected period.
   - **CAPA (Corrective and Preventive Actions):**
     - Import CAPA data from CSV/TSV files with robust, flexible parsing.
     - Automatically calculate overdue CAPAs based on 'Due Date' and 'Deadline for effectiveness check', with phase-aware logic.
@@ -15,7 +20,6 @@
     - Interactive data visualizations, including charts for CAPA status and distribution by assignee.
     - Clickable charts to drill down into specific data segments (e.g., view all CAPAs for a selected assignee).
     - Detailed data table with customizable column visibility.
-    - AI-powered summarization of the current CAPA landscape.
   - **Change Action:**
     - Import Change Action data from CSV/TSV files with robust parsing.
     - Filter actions by completion status and team (Production Only vs. All).
@@ -34,7 +38,7 @@
     - Dashboard featuring "Glassmorphism" design for high visual impact.
     - Top-level stats for Total Assignments, Completion Rate (Radial Chart), and Overdue List.
     - "Training Overview" bar chart showing completed vs. pending training per trainee.
-    - "Process overview" pie chart showing the breakdown of training categories.
+    - "Department Vibe Check" pie chart showing the breakdown of training categories.
     - Detailed "Call Out List" table with status badges (Slay, WIP, Late!) and tooltips for pending steps.
     
 - **Centralized Settings:**
@@ -57,11 +61,3 @@
 - A clean, card-based layout to present KPIs and data points in an organized manner.
 - Subtle animations to show loading states and transitions, improving user experience without being distracting.
 - Glassmorphism effects used in the Training dashboard and Settings page for a modern, polished look.
-The color palettes should be like this:
-Light: (Clean White/Blue/Gold)
-
-Dark: (High Contrast Navy/White)
-
-Rose: (Soft Blush/Hot Pink/Ink Black/Rose gold)
-
-Slate: (Muted Grey/Indigo/Gunmetal)
