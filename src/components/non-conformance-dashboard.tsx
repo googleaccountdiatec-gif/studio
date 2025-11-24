@@ -174,12 +174,11 @@ export default function NonConformanceDashboard() {
             <BarChart data={filteredChartData} onClick={handleBarClick}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
-              <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-              <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
+              <YAxis />
               <Tooltip />
               <Legend />
-              <Bar yAxisId="right" dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-2))" cursor="pointer" />
-              <Bar yAxisId="right" dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-5))" cursor="pointer" />
+              <Bar dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-2))" cursor="pointer" />
+              <Bar dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-5))" cursor="pointer" />
               <Bar dataKey="total" name="Total NCs" fill="hsl(var(--chart-1))" cursor="pointer" />
             </BarChart>
           </ResponsiveContainer>

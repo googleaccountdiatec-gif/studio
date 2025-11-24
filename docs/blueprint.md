@@ -34,7 +34,7 @@
     - Dashboard featuring "Glassmorphism" design for high visual impact.
     - Top-level stats for Total Assignments, Completion Rate (Radial Chart), and Overdue List.
     - "Training Overview" bar chart showing completed vs. pending training per trainee.
-    - "Department Vibe Check" pie chart showing the breakdown of training categories.
+    - "Process overview" pie chart showing the breakdown of training categories.
     - Detailed "Call Out List" table with status badges (Slay, WIP, Late!) and tooltips for pending steps.
     
 - **Centralized Settings:**

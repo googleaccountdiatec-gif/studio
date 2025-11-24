@@ -260,7 +260,7 @@ export default function TrainingDashboard() {
         </GlassCard>
 
         <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Department Vibe Check</h3>
+            <h3 className="text-lg font-semibold mb-4">Process Overview</h3>
             <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                     <Pie
