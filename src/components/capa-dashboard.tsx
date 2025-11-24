@@ -27,23 +27,45 @@ import { getProductionTeam } from '@/lib/teams';
 import { useData } from '@/contexts/data-context';
 
 
-const DATE_FORMATS = ['M/d/yyyy', 'MM/dd/yyyy', 'M-d-yyyy', 'MM-dd-yyyy', 'dd.MM.yyyy'];
+const DATE_FORMATS = [
+  'dd/MM/yyyy', 
+  'd/M/yyyy',
+  'dd.MM.yyyy', 
+  'd.M.yyyy',
+  'yyyy-MM-dd',
+  // US formats moved to the bottom as fallbacks
+  'M/d/yyyy', 
+  'MM/dd/yyyy', 
+  'M-d-yyyy', 
+  'MM-dd-yyyy',
+];
 
 const parseDate = (dateString: string): Date => {
   if (!dateString) return new Date('invalid');
-  const ddMMyyyy = dateString.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  
+  // Clean the string: remove invisible characters, trim whitespace
+  const cleanString = dateString.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+
+  // Specific handling for DD.MM.YYYY (very common in your files) to avoid ambiguity
+  const ddMMyyyy = cleanString.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if (ddMMyyyy) {
     const [, day, month, year] = ddMMyyyy;
     const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
     if (isValid(parsed)) return parsed;
   }
 
-  for (const format of DATE_FORMATS) {
-    const parsedDate = parse(dateString.trim(), format, new Date());
+  // Try parsing with date-fns
+  for (const formatStr of DATE_FORMATS) {
+    const parsedDate = parse(cleanString, formatStr, new Date());
     if (isValid(parsedDate)) {
       return parsedDate;
     }
   }
+
+  // Fallback: Try native Date parsing (good for ISO strings)
+  const nativeDate = new Date(cleanString);
+  if (isValid(nativeDate)) return nativeDate;
+
   return new Date('invalid');
 }
 

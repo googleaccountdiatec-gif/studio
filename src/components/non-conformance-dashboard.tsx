@@ -29,10 +29,19 @@ interface NonConformanceData {
   registrationDate: Date;
 }
 
+const DATE_FORMATS = [
+  "dd/MM/yyyy hh:mm a", 
+  "dd/MM/yyyy H:mm", 
+  "dd/MM/yyyy", 
+  'M/d/yyyy', 
+  'MM/dd/yyyy', 
+  'dd.MM.yyyy',
+  "dd.MM.yyyy HH:mm"
+];
+
 const parseDate = (dateString: string): Date => {
   if (!dateString) return new Date('invalid');
-  const formats = ["dd/MM/yyyy hh:mm a", "dd/MM/yyyy H:mm", "dd/MM/yyyy"];
-  for (const fmt of formats) {
+  for (const fmt of DATE_FORMATS) {
     const parsed = parse(dateString.trim(), fmt, new Date());
     if (isValid(parsed)) return parsed;
   }
@@ -42,96 +51,10 @@ const parseDate = (dateString: string): Date => {
   return new Date('invalid');
 };
 
-const parseCustomCSV = (text: string): string[][] => {
-  const rows: string[][] = [];
-  let currentRow: string[] = [];
-  let currentField = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    if (char === '"') {
-      if (inQuotes && text[i + 1] === '"') {
-        currentField += '"'; i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ';' && !inQuotes) {
-      currentRow.push(currentField.trim());
-      currentField = '';
-    } else if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (currentField || currentRow.length > 0) {
-        currentRow.push(currentField.trim());
-        if (currentRow.length > 1 || (currentRow.length === 1 && currentRow[0] !== '')) {
-            rows.push(currentRow);
-        }
-        currentRow = [];
-        currentField = '';
-      }
-      if (char === '\r' && text[i + 1] === '\n') i++;
-    } else {
-      currentField += char;
-    }
-  }
-  if (currentField || currentRow.length > 0) {
-    currentRow.push(currentField.trim());
-    if (currentRow.length > 1 || (currentRow.length === 1 && currentRow[0] !== '')) {
-        rows.push(currentRow);
-      }
-  }
-  return rows.filter(row => row.length > 1 || (row.length === 1 && row[0] !== ''));
-};
-
 export default function NonConformanceDashboard() {
-  const { nonConformanceData, setNonConformanceData } = useData();
+  const { nonConformanceData } = useData();
   const [yearFilter, setYearFilter] = useState<'all' | 'current' | 'previous' | 'current-previous'>('current-previous');
   const [dialogData, setDialogData] = useState<{ title: string; data: NonConformanceData[] } | null>(null);
-  const { toast } = useToast();
-
-  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (!text) {
-        toast({ variant: "destructive", title: "Error Reading File", description: "Could not read the uploaded file." });
-        return;
-      }
-
-      try {
-        const rows = parseCustomCSV(text);
-        if (rows.length < 2) throw new Error("File must have a header and at least one data row.");
-        
-        const header = rows[0].map(h => h.trim().replace(/"/g, ''));
-        const missingHeaders = EXPECTED_HEADERS.filter(h => !header.includes(h));
-        if (missingHeaders.length > 0) throw new Error(`File is missing required columns: ${missingHeaders.join(', ')}`);
-        
-        const headerMap = header.reduce((acc, h, i) => ({ ...acc, [h]: i }), {} as Record<string, number>);
-
-        const parsedData = rows.slice(1).map(row => {
-          const entry: any = {};
-          EXPECTED_HEADERS.forEach(h => {
-              const index = headerMap[h];
-              entry[h] = row[index]?.trim().replace(/"/g, '') || '';
-          });
-          return entry;
-        });
-
-        setNonConformanceData(parsedData);
-        toast({ title: "Success", description: `Successfully imported ${parsedData.length} records.` });
-
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-        toast({ variant: "destructive", title: "File Parsing Error", description: errorMessage });
-        setNonConformanceData([]);
-      }
-    };
-    reader.readAsText(file, 'latin1');
-    event.target.value = '';
-  };
-
 
   const allDataWithDates = useMemo(() => nonConformanceData.map(item => ({
     ...item,
@@ -251,11 +174,12 @@ export default function NonConformanceDashboard() {
             <BarChart data={filteredChartData} onClick={handleBarClick}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
-              <YAxis />
+              <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
+              <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
               <Tooltip />
               <Legend />
-              <Bar dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-2))" cursor="pointer" />
-              <Bar dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-5))" cursor="pointer" />
+              <Bar yAxisId="right" dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-2))" cursor="pointer" />
+              <Bar yAxisId="right" dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-5))" cursor="pointer" />
               <Bar dataKey="total" name="Total NCs" fill="hsl(var(--chart-1))" cursor="pointer" />
             </BarChart>
           </ResponsiveContainer>
@@ -289,7 +213,7 @@ export default function NonConformanceDashboard() {
       <p className="text-muted-foreground mb-6 max-w-md">Use the uploader in the header to import your "Non-conformance KPIs.csv" file.</p>
     </div>
   );
-
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4 flex-wrap">

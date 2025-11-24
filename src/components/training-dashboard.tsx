@@ -33,21 +33,41 @@ interface ProcessedTrainingRecord {
   pendingStep: string;
 }
 
+const DATE_FORMATS = [
+  'dd/MM/yyyy',
+  'dd.MM.yyyy',
+  'M/d/yyyy',
+  'MM/dd/yyyy'
+];
+
+const parseTrainingDate = (dateString: string): Date => {
+  if (!dateString) return new Date('invalid');
+
+  // Specific handling for slash-separated dd/MM/yyyy
+  const slashParts = dateString.split('/');
+  if (slashParts.length === 3) {
+      // Assuming dd/MM/yyyy
+      const day = parseInt(slashParts[0], 10);
+      const month = parseInt(slashParts[1], 10) - 1; // Months are 0-indexed
+      const year = parseInt(slashParts[2], 10);
+      const date = new Date(year, month, day);
+      if (isValid(date)) return date;
+  }
+
+  for (const formatStr of DATE_FORMATS) {
+    const parsed = parse(dateString.trim(), formatStr, new Date());
+    if (isValid(parsed)) {
+      return parsed;
+    }
+  }
+
+  return new Date('invalid');
+}
+
 const parseTrainingData = (row: TrainingData): ProcessedTrainingRecord => {
   const today = startOfDay(new Date());
-  let deadline = new Date('invalid');
   
-  // Try parsing DD/MM/YYYY
-  const dateParts = row['Deadline for completing training']?.split('/');
-  if (dateParts && dateParts.length === 3) {
-      deadline = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
-  }
-  
-  // Fallback if simple split fails or date is invalid
-  if (!isValid(deadline)) {
-      // Try standard parser just in case
-      deadline = parse(row['Deadline for completing training'], 'dd/MM/yyyy', new Date());
-  }
+  const deadline = parseTrainingDate(row['Deadline for completing training']);
 
   const pendingSteps = row['Pending Steps']?.trim();
   let status: ProcessedTrainingRecord['status'] = 'Pending';
@@ -240,7 +260,7 @@ export default function TrainingDashboard() {
         </GlassCard>
 
         <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Process Overview</h3>
+            <h3 className="text-lg font-semibold mb-4">Department Vibe Check</h3>
             <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                     <Pie

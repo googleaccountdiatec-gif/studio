@@ -189,11 +189,11 @@ export default function CompendiumDashboard() {
         </div>
         
         <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={overdueData} layout="vertical" margin={{ left: 20 }}>
+            <BarChart data={overdueData} layout="vertical" margin={{ left: 20, right: 30 }}>
                 <XAxis type="number" hide />
                 <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12, fontWeight: 500 }} />
                 <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
-                <Bar dataKey="count" name="Overdue Items" radius={[0, 4, 4, 0]} barSize={40} label={{ position: 'right', fill: 'hsl(var(--foreground))', fontSize: 12 }}>
+                <Bar dataKey="count" name="Overdue Items" radius={[0, 4, 4, 0]} barSize={40} label={{ position: 'right', fill: 'hsl(var(--foreground))', fontSize: 12, offset: 5 }}>
                     {
                         overdueData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.fill} />
