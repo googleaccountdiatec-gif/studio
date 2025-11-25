@@ -121,14 +121,13 @@ export function MultiUploader() {
              throw new Error("File appears empty or missing a header row.");
           }
           
-          const header = rows[0].map(h => h.trim().replace(/^"|"$/g, '').trim()); // Remove surrounding quotes from headers
+          const header = rows[0].map(h => h.trim()); 
           const data = rows.slice(1).map(row => {
-            const entry: any = {};
+            const entry: Record<string, string> = {};
             header.forEach((h, i) => { 
                 // Robustly handle potential undefined columns if row length < header length
                 const val = row[i];
-                // Remove surrounding quotes if they persist, though the parser handles internal quotes
-                entry[h] = val ? val.replace(/^"|"$/g, '') : ''; 
+                entry[h] = val ? val.trim() : ''; 
             });
             return entry;
           });

@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useData } from '@/contexts/data-context';
+import { getProductionTeam } from '@/lib/teams';
+import { Switch } from '@/components/ui/switch';
 
 const EXPECTED_HEADERS = ["Id", "Non Conformance Title", "Classification", "Pending Steps", "Case Worker", "Deadline for Investigation and Action Plan", "Registration Time", "Registered By", "Reoccurrence"];
 
@@ -54,12 +56,25 @@ const parseDate = (dateString: string): Date => {
 export default function NonConformanceDashboard() {
   const { nonConformanceData } = useData();
   const [yearFilter, setYearFilter] = useState<'all' | 'current' | 'previous' | 'current-previous'>('current-previous');
+  const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const [dialogData, setDialogData] = useState<{ title: string; data: NonConformanceData[] } | null>(null);
+  const productionTeam = getProductionTeam();
 
-  const allDataWithDates = useMemo(() => nonConformanceData.map(item => ({
-    ...item,
-    registrationDate: parseDate(item["Registration Time"]),
-  })), [nonConformanceData]);
+  const allDataWithDates = useMemo(() => {
+    let data = nonConformanceData.map(item => ({
+        ...item,
+        registrationDate: parseDate(item["Registration Time"]),
+    }));
+
+    if (teamFilter === 'production') {
+        data = data.filter(item => 
+            productionTeam.includes(item["Case Worker"]) || 
+            productionTeam.includes(item["Registered By"])
+        );
+    }
+
+    return data;
+  }, [nonConformanceData, teamFilter, productionTeam]);
 
   const quarterlyData = useMemo(() => {
     if (allDataWithDates.length === 0) return [];
@@ -157,6 +172,7 @@ export default function NonConformanceDashboard() {
     { accessorKey: 'Id', header: 'ID', cell: (row) => row.Id },
     { accessorKey: 'Non Conformance Title', header: 'Title', cell: (row) => row["Non Conformance Title"] },
     { accessorKey: 'Registered By', header: 'Registered By', cell: (row) => row["Registered By"] },
+    { accessorKey: 'Case Worker', header: 'Case Worker', cell: (row) => row["Case Worker"] },
     { accessorKey: 'Registration Time', header: 'Registration Time', cell: (row) => row["Registration Time"] },
     { accessorKey: 'Classification', header: 'Classification', cell: (row) => row.Classification },
     { accessorKey: 'Reoccurrence', header: 'Reoccurrence', cell: (row) => row.Reoccurrence },
@@ -174,12 +190,13 @@ export default function NonConformanceDashboard() {
             <BarChart data={filteredChartData} onClick={handleBarClick}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
-              <YAxis />
+              <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
+              <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
               <Tooltip />
               <Legend />
-              <Bar dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-2))" cursor="pointer" />
-              <Bar dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-5))" cursor="pointer" />
-              <Bar dataKey="total" name="Total NCs" fill="hsl(var(--chart-1))" cursor="pointer" />
+              <Bar yAxisId="right" dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-2))" cursor="pointer" />
+              <Bar yAxisId="right" dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-5))" cursor="pointer" />
+              <Bar yAxisId="left" dataKey="total" name="Total NCs" fill="hsl(var(--chart-1))" cursor="pointer" />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -233,6 +250,18 @@ export default function NonConformanceDashboard() {
             <div className="flex items-center space-x-2">
                 <RadioGroupItem value="previous" id="year-previous" />
                 <Label htmlFor="year-previous">Previous Year</Label>
+            </div>
+        </RadioGroup>
+        
+        <RadioGroup value={teamFilter} onValueChange={(value) => setTeamFilter(value as any)} className="flex items-center gap-4 ml-auto">
+            <Label>Team:</Label>
+            <div className="flex items-center space-x-2">
+                <RadioGroupItem value="all" id="t1-nc" />
+                <Label htmlFor="t1-nc">All Operators</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+                <RadioGroupItem value="production" id="t2-nc" />
+                <Label htmlFor="t2-nc">Production Only</Label>
             </div>
         </RadioGroup>
       </div>
