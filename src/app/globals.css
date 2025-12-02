@@ -152,6 +152,67 @@
     --chart-4: 330 70% 70%; /* Dusty Rose */
     --chart-5: 150 40% 60%; /* Muted Sage */
   }
+
+  .curida {
+    /* --- 🩸 CURIDA THEME*/
+    /* Derived from image hex codes: */
+    /* Background: #FFF3F0 */
+    /* Secondary: #FFDDD9 */
+    /* Primary: #E93420 */
+    /* Dark/Text: #250704 */
+    
+    --background: 10 50% 97%; 
+    --foreground: 7 81% 8%; /* #250704 - slightly adjusted for legibility */
+    
+    --card: 10 50% 98%; 
+    --card-foreground: 7 81% 8%;
+    
+    --popover: 10 50% 98%;
+    --popover-foreground: 7 81% 8%;
+    
+    /* Primary: Vibrant Red-Orange (#E93420) - The Energy */
+    --primary: 6 83% 52%; 
+    --primary-foreground: 10 50% 97%;
+
+    /* Secondary: Soft Pink (#FFDDD9) - The Cushion */
+    --secondary: 6 100% 93%; 
+    --secondary-foreground: 7 81% 8%;
+    
+    /* Muted: Using the pink tone but softer for backgrounds */
+    --muted: 6 50% 96%;
+    --muted-foreground: 7 40% 40%;
+    
+    /* Accent: The Dark Dominant (#250704) */
+    /* Used for hover states or strong emphasis */
+    --accent: 7 81% 8%; 
+    --accent-foreground: 10 50% 97%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    
+    /* Borders: A slightly darker pink/red mix to keep it warm */
+    --border: 6 60% 90%;
+    --input: 6 60% 90%;
+    --ring: 6 83% 52%;
+
+    /* --- CHART VARIABLES --- */
+    /* Matches the visual hierarchy of the screenshot */
+    
+    
+    --chart-1: 7 81% 8%; 
+    
+    
+    --chart-2: 6 83% 52%; 
+    
+    /* Chart 3: Golden/Bronze (Complementary warmth) */
+    --chart-3: 35 90% 60%; 
+    
+    /* Chart 4: Soft Pink (For background data) */
+    --chart-4: 6 100% 93%; 
+    
+    /* Chart 5: Deep Teal (To cool it down just a specific amount) */
+    --chart-5: 170 50% 40%; 
+  }
 }
 
 @layer base {
@@ -160,5 +221,26 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .animate-mist {
+    animation: mist 20s ease-in-out infinite alternate;
+  }
+  
+  @keyframes mist {
+    0% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+    }
+    33% {
+      transform: translate(30px, -50px) rotate(120deg) scale(1.1);
+    }
+    66% {
+      transform: translate(-20px, 20px) rotate(240deg) scale(0.9);
+    }
+    100% {
+      transform: translate(0, 0) rotate(360deg) scale(1);
+    }
   }
 }

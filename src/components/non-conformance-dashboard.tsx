@@ -145,33 +145,6 @@ export default function NonConformanceDashboard() {
   }, [quarterlyData, yearFilter]);
 
 
-  const handleBarClick = (payload: any) => {
-    if (!payload || !payload.activePayload || !payload.activePayload[0]) return;
-    
-    // payload.activePayload gives us the data for the hovered/clicked section
-    // payload.activePayload[0].dataKey tells us WHICH bar was clicked (lowRisk, highRisk, total)
-    const clickedDataKey = payload.activeTooltipIndex !== undefined && payload.activePayload 
-        ? payload.activePayload.find((p: any) => p.dataKey === 'lowRisk' || p.dataKey === 'highRisk' || p.dataKey === 'total' || p.dataKey === 'reoccurring')?.dataKey 
-        : null;
-        
-    // Recharts onClick is a bit tricky. It returns the whole payload for the category (quarter).
-    // The best way to differentiate bars is often checking the active payload.
-    // However, for grouped bars, Recharts doesn't always tell you which specific bar was clicked in the top-level event easily.
-    // A robust way is to filter based on the 'dataKey' present in the activePayload that corresponds to the mouse position, 
-    // but simpler is to look at what data is passed.
-    
-    // Actually, let's trust the tooltip payload logic if possible, or just show ALL data for that quarter if it's ambiguous,
-    // BUT the user specifically asked for separation.
-    // Let's try to infer from the payload structure.
-    
-    // The passed `payload` object in onClick contains `activePayload` which is an array of tooltip items.
-    // If you click a specific bar, it's hard to distinguish without a custom cursor implementation or similar.
-    // BUT, we can use the `dataKey` from the specific `Bar` component if we attach the handler there.
-    // Let's move the onClick handler to the `Bar` components themselves! This is the reliable way.
-    return; 
-  };
-  
-  // New specific handlers for each bar type
   const handleSpecificBarClick = (data: any, type: 'low' | 'high' | 'total' | 'reoccurring') => {
       const quarterName = data.name;
       const quarterInfo = quarterlyData.find(q => q.name === quarterName);
@@ -226,22 +199,34 @@ export default function NonConformanceDashboard() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
               <YAxis stroke="#8884d8" />
-              <Tooltip />
+              <Tooltip 
+                contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card))', 
+                    borderRadius: '8px', 
+                    border: '1px solid hsl(var(--border))' 
+                }} 
+              />
               <Legend />
+              
+              {/* LOW RISK: Soft Submissive Pink (--chart-4) */}
               <Bar 
                 dataKey="lowRisk" 
                 name="Low Risk" 
-                fill="hsl(var(--chart-2))" 
+                fill="hsl(var(--chart-4))" 
                 cursor="pointer" 
                 onClick={(data) => handleSpecificBarClick(data, 'low')}
               />
+              
+              {/* HIGH RISK: Dangerous Aggressive Red (--chart-2) */}
               <Bar 
                 dataKey="highRisk" 
                 name="High Risk" 
-                fill="hsl(var(--chart-5))" 
+                fill="hsl(var(--chart-2))" 
                 cursor="pointer" 
                 onClick={(data) => handleSpecificBarClick(data, 'high')}
               />
+              
+              {/* TOTAL: The Dominant Master Black (--chart-1) */}
               <Bar 
                 dataKey="total" 
                 name="Total NCs" 
@@ -264,13 +249,20 @@ export default function NonConformanceDashboard() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip />
+                    <Tooltip 
+                        contentStyle={{ 
+                            backgroundColor: 'hsl(var(--card))', 
+                            borderRadius: '8px', 
+                            border: '1px solid hsl(var(--border))' 
+                        }} 
+                    />
                     <Legend />
+                    {/* LINE: Using the Red Primary to slash through the data */}
                     <Line 
                         type="monotone" 
                         dataKey="reoccurring" 
                         name="Reoccurring" 
-                        stroke="hsl(var(--chart-1))" 
+                        stroke="hsl(var(--primary))" 
                         strokeWidth={2} 
                         cursor="pointer" 
                         activeDot={{ r: 8, onClick: (e, payload) => handleSpecificBarClick(payload.payload, 'reoccurring') }}

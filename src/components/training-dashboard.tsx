@@ -43,12 +43,10 @@ const DATE_FORMATS = [
 const parseTrainingDate = (dateString: string): Date => {
   if (!dateString) return new Date('invalid');
 
-  // Specific handling for slash-separated dd/MM/yyyy
   const slashParts = dateString.split('/');
   if (slashParts.length === 3) {
-      // Assuming dd/MM/yyyy
       const day = parseInt(slashParts[0], 10);
-      const month = parseInt(slashParts[1], 10) - 1; // Months are 0-indexed
+      const month = parseInt(slashParts[1], 10) - 1; 
       const year = parseInt(slashParts[2], 10);
       const date = new Date(year, month, day);
       if (isValid(date)) return date;
@@ -139,7 +137,6 @@ export default function TrainingDashboard() {
     return Object.entries(categoryCounts).map(([name, value]) => ({ name, value }));
   }, [processedData]);
 
-  // Use semantic CSS variables for theme-aware colors
   const PIE_COLORS = [
     'hsl(var(--chart-1))', 
     'hsl(var(--chart-2))', 
@@ -186,7 +183,6 @@ export default function TrainingDashboard() {
     );
   }
 
-  // Dynamic height calculation: 50px per user + 50px buffer, with a minimum of 300px
   const chartHeight = Math.max(chartData.length * 50 + 50, 300);
 
   return (
@@ -252,9 +248,14 @@ export default function TrainingDashboard() {
                     <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0} />
                     <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
                     <Legend />
+                    {/* 1. Completed: The success state (Green/Teal) */}
                     <Bar dataKey="completed" name="Completed" stackId="a" fill="hsl(var(--chart-5))" />
-                    <Bar dataKey="pending" name="Pending" stackId="a" fill="hsl(var(--chart-2))" />
-                    <Bar dataKey="overdue" name="Overdue" stackId="a" fill="hsl(var(--destructive))" radius={[0, 4, 4, 0]} />
+                    
+                    {/* 2. Pending: Soft, light pink (The "Curida" secondary color) */}
+                    <Bar dataKey="pending" name="Pending" stackId="a" fill="hsl(var(--chart-4))" />
+                    
+                    {/* 3. Overdue: Heavy, dominant Red (The "Curida" primary/chart-2) */}
+                    <Bar dataKey="overdue" name="Overdue" stackId="a" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
                 </BarChart>
             </ResponsiveContainer>
         </GlassCard>

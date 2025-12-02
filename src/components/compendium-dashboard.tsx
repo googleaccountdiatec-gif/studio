@@ -152,11 +152,21 @@ export default function CompendiumDashboard() {
         }
     });
 
+    // --- OVERDUE COLORS (The Heat Map of Failure) ---
     return [
-        { name: 'Non-Conformance', count: nonConformance, fill: 'hsl(var(--chart-5))' },
+        // Non-Conformance: The Red Danger (--chart-2)
+        { name: 'Non-Conformance', count: nonConformance, fill: 'hsl(var(--chart-2))' },
+        
+        // CAPA Exec: The Heavy Duty Black (--chart-1)
         { name: 'CAPA (Exec)', count: capaExecution, fill: 'hsl(var(--chart-1))' },
-        { name: 'CAPA (Eff)', count: capaEffectiveness, fill: 'hsl(var(--chart-2))' },
-        { name: 'Change Actions', count: changeActions, fill: 'hsl(var(--chart-3))' },
+        
+        // CAPA Eff: The Warning Orange (--chart-3)
+        { name: 'CAPA (Eff)', count: capaEffectiveness, fill: 'hsl(var(--chart-3))' },
+        
+        // Change Actions: The Hot Pink (--primary) - Urgent
+        { name: 'Change Actions', count: changeActions, fill: 'hsl(var(--primary))' },
+        
+        // Training: The Soft Pink (--chart-4) - Least "Dangerous" but still annoying
         { name: 'Training', count: training, fill: 'hsl(var(--chart-4))' },
     ];
 
@@ -171,7 +181,6 @@ export default function CompendiumDashboard() {
         <GlassCard className="p-6">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">NC Risk & Volume (Current & Prev. Year)</h3>
-                {/* Team filter is global for the page, but we show context here */}
             </div>
             <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={ncChartData}>
@@ -180,8 +189,14 @@ export default function CompendiumDashboard() {
                     <YAxis width={30} tick={{fontSize: 10}} />
                     <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
                     <Legend wrapperStyle={{fontSize: '12px'}} />
-                    <Bar dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-2))"  />
-                    <Bar dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-5))"  />
+                    
+                    {/* LOW RISK: Soft Pink (--chart-4) */}
+                    <Bar dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-4))"  />
+                    
+                    {/* HIGH RISK: Aggressive Red (--chart-2) */}
+                    <Bar dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-2))"  />
+                    
+                    {/* TOTAL: Dominant Black (--chart-1) */}
                     <Bar dataKey="total" name="Total" fill="hsl(var(--chart-1))"  />
                 </BarChart>
             </ResponsiveContainer>
@@ -196,7 +211,8 @@ export default function CompendiumDashboard() {
                     <YAxis width={30} tick={{fontSize: 10}} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
                     <Legend wrapperStyle={{fontSize: '12px'}} />
-                    <Line type="monotone" dataKey="reoccurring" name="Reoccurring" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={{r: 4}} />
+                    {/* REOCCURRING: Bright Primary Red Line */}
+                    <Line type="monotone" dataKey="reoccurring" name="Reoccurring" stroke="hsl(var(--primary))" strokeWidth={2} dot={{r: 4}} />
                  </LineChart>
             </ResponsiveContainer>
         </GlassCard>

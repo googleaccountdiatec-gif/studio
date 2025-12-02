@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "next-themes";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/toaster"
 import { DataProvider } from "@/contexts/data-context";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -23,7 +23,7 @@ export default function RootLayout({
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
-          themes={['light', 'dark', 'rose', 'slate']}
+          themes={['light', 'dark', 'rose', 'slate', 'curida']}
           disableTransitionOnChange
         >
           <DataProvider>

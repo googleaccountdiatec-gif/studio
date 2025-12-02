@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { getProductionTeam, setProductionTeam } from '@/lib/teams';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { XIcon, PlusIcon, Palette } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
+import { GlassCard } from '@/components/ui/glass-card';
 
 export default function SettingsPage() {
   const [team, setTeam] = useState<string[]>([]);
@@ -58,27 +59,23 @@ export default function SettingsPage() {
   };
   
   const themes = [
-    // ☀️ Light Theme 
-    // BG: Cool White | Pri: Vibrant Blue | Acc: Golden Orange
-    { name: 'light', colors: ['#F9FAFB', '#2563EB', '#F59E0B'] },
-  
-    // 🌑 Dark Theme
-    // BG: Deep Navy | Pri: White | Acc: Dark Slate
-    { name: 'dark', colors: ['#0F172A', '#F8FAFC', '#1E293B'] },
-  
-    // 🌹 Rose Theme (Baddie Edition)
-    // BG: Softest Pink | Pri: Hot Pink | Acc: THE SEXY BLACK
-    // (hsl(345, 93%, 96%) -> #FFECF1)
-    { name: 'rose', colors: ['#FFECF1', '#E11D48', '#171717'] },
-  
-    // 🌫️ Slate Theme
-    // BG: Matte Grey | Pri: Soft Indigo | Acc: Muted Gunmetal
-    { name: 'slate', colors: ['#23262F', '#687CEB', '#363B49'] },
+    { name: 'light', colors: ['#ECEFF1', '#3F51B5', '#FFAB40'] },
+    { name: 'dark', colors: ['#111827', '#60A5FA', '#FBBF24'] },
+    { name: 'rose', colors: ['#FFF1F2', '#F43F5E', '#FB923C'] },
+    { name: 'slate', colors: ['#0F172A', '#64748B', '#FBBF24'] },
+    { name: 'curida', colors: ['#FFF3F0', '#E93420', '#250704'] },
   ];
 
   return (
-    <div className="space-y-6">
-       <Card>
+    <div className="relative min-h-screen w-full p-10 flex flex-col gap-8 items-center overflow-hidden">
+       {/* Swirly Mist Background */}
+       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+          <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-primary/20 rounded-full blur-[120px] animate-mist opacity-60" />
+          <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-accent/20 rounded-full blur-[100px] animate-mist opacity-60" style={{ animationDelay: '-10s', animationDuration: '25s' }} />
+          <div className="absolute top-[40%] left-[30%] w-[400px] h-[400px] bg-secondary/30 rounded-full blur-[80px] animate-mist opacity-40" style={{ animationDelay: '-5s', animationDuration: '15s' }} />
+       </div>
+
+       <GlassCard className="w-full max-w-2xl p-8 z-10">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <Palette className="h-6 w-6" />
@@ -89,7 +86,7 @@ export default function SettingsPage() {
             <CardContent>
                 <div className="space-y-2">
                     <Label>Color Theme</Label>
-                    <div className="flex gap-4">
+                    <div className="flex gap-4 flex-wrap">
                         {themes.map((t) => (
                             <div key={t.name} onClick={() => setTheme(t.name)} className={cn("cursor-pointer rounded-md border-2 p-1", theme === t.name && "border-primary")}>
                                 <div className="flex gap-1">
@@ -103,8 +100,8 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </CardContent>
-        </Card>
-        <Card>
+        </GlassCard>
+        <GlassCard className="w-full max-w-2xl p-8 z-10">
             <CardHeader>
                 <CardTitle>Team Management</CardTitle>
                 <CardDescription>Manage your production team members.</CardDescription>
@@ -140,7 +137,7 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </CardContent>
-        </Card>
+        </GlassCard>
     </div>
   );
 }
