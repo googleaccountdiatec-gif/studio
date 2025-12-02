@@ -94,6 +94,7 @@ export default function CompendiumDashboard() {
     let capaEffectiveness = 0;
     let changeActions = 0;
     let training = 0;
+    let nonConformance = 0;
 
     // CAPA Overdue
     capaData.forEach(item => {
@@ -135,14 +136,31 @@ export default function CompendiumDashboard() {
         }
     });
 
+    // Non-Conformance Overdue
+    nonConformanceData.forEach(item => {
+        if (teamFilter === 'production') {
+            const worker = item["Case Worker"];
+            const registeredBy = item["Registered By"];
+            if (!productionTeam.includes(worker) && !productionTeam.includes(registeredBy)) {
+                return;
+            }
+        }
+        
+        // Check for "Deadline Exceeded" status
+        if (item.Status === 'Deadline Exceeded') {
+            nonConformance++;
+        }
+    });
+
     return [
+        { name: 'Non-Conformance', count: nonConformance, fill: 'hsl(var(--chart-5))' },
         { name: 'CAPA (Exec)', count: capaExecution, fill: 'hsl(var(--chart-1))' },
         { name: 'CAPA (Eff)', count: capaEffectiveness, fill: 'hsl(var(--chart-2))' },
         { name: 'Change Actions', count: changeActions, fill: 'hsl(var(--chart-3))' },
         { name: 'Training', count: training, fill: 'hsl(var(--chart-4))' },
     ];
 
-  }, [capaData, changeActionData, trainingData, teamFilter, productionTeam]);
+  }, [capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]);
 
 
   return (

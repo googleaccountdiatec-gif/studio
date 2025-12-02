@@ -15,8 +15,10 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { useData } from '@/contexts/data-context';
 import { getProductionTeam } from '@/lib/teams';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 
-const EXPECTED_HEADERS = ["Id", "Non Conformance Title", "Classification", "Pending Steps", "Case Worker", "Deadline for Investigation and Action Plan", "Registration Time", "Registered By", "Reoccurrence"];
+// Updated headers: Removed "Deadline...", Added "Status"
+const EXPECTED_HEADERS = ["Id", "Non Conformance Title", "Classification", "Pending Steps", "Case Worker", "Status", "Registration Time", "Registered By", "Reoccurrence"];
 
 interface NonConformanceData {
   Id: string;
@@ -24,7 +26,7 @@ interface NonConformanceData {
   Classification: "Low risk" | "High risk" | string;
   "Pending Steps": string;
   "Case Worker": string;
-  "Deadline for Investigation and Action Plan": string;
+  "Status": string;
   "Registration Time": string;
   "Registered By": string;
   Reoccurrence: "YES" | "NO" | string;
@@ -145,32 +147,65 @@ export default function NonConformanceDashboard() {
 
   const handleBarClick = (payload: any) => {
     if (!payload || !payload.activePayload || !payload.activePayload[0]) return;
-    const quarterName = payload.activePayload[0].payload.name;
-    const seriesName = payload.activePayload[0].name;
     
-    const quarterInfo = quarterlyData.find(q => q.name === quarterName);
-    if (!quarterInfo) return;
-
-    let recordsToShow = quarterInfo.records;
-    let title = `${seriesName} NCs for ${quarterName}`;
-
-    if (seriesName === "Low Risk") {
-      recordsToShow = quarterInfo.records.filter(r => r.Classification === "Low risk");
-    } else if (seriesName === "High Risk") {
-       recordsToShow = quarterInfo.records.filter(r => r.Classification === "High risk");
-    } else if (seriesName === "Reoccurring") {
-       recordsToShow = quarterInfo.records.filter(r => r.Reoccurrence === "YES");
-       title = `Reoccurring NCs for ${quarterName}`;
-    } else if (seriesName === "Total NCs") {
-      // No extra filtering needed
-    }
+    // payload.activePayload gives us the data for the hovered/clicked section
+    // payload.activePayload[0].dataKey tells us WHICH bar was clicked (lowRisk, highRisk, total)
+    const clickedDataKey = payload.activeTooltipIndex !== undefined && payload.activePayload 
+        ? payload.activePayload.find((p: any) => p.dataKey === 'lowRisk' || p.dataKey === 'highRisk' || p.dataKey === 'total' || p.dataKey === 'reoccurring')?.dataKey 
+        : null;
+        
+    // Recharts onClick is a bit tricky. It returns the whole payload for the category (quarter).
+    // The best way to differentiate bars is often checking the active payload.
+    // However, for grouped bars, Recharts doesn't always tell you which specific bar was clicked in the top-level event easily.
+    // A robust way is to filter based on the 'dataKey' present in the activePayload that corresponds to the mouse position, 
+    // but simpler is to look at what data is passed.
     
-    setDialogData({ title, data: recordsToShow });
+    // Actually, let's trust the tooltip payload logic if possible, or just show ALL data for that quarter if it's ambiguous,
+    // BUT the user specifically asked for separation.
+    // Let's try to infer from the payload structure.
+    
+    // The passed `payload` object in onClick contains `activePayload` which is an array of tooltip items.
+    // If you click a specific bar, it's hard to distinguish without a custom cursor implementation or similar.
+    // BUT, we can use the `dataKey` from the specific `Bar` component if we attach the handler there.
+    // Let's move the onClick handler to the `Bar` components themselves! This is the reliable way.
+    return; 
   };
+  
+  // New specific handlers for each bar type
+  const handleSpecificBarClick = (data: any, type: 'low' | 'high' | 'total' | 'reoccurring') => {
+      const quarterName = data.name;
+      const quarterInfo = quarterlyData.find(q => q.name === quarterName);
+      if (!quarterInfo) return;
+
+      let recordsToShow = quarterInfo.records;
+      let title = "";
+
+      if (type === 'low') {
+          recordsToShow = quarterInfo.records.filter(r => r.Classification === "Low risk");
+          title = `Low Risk NCs for ${quarterName}`;
+      } else if (type === 'high') {
+          recordsToShow = quarterInfo.records.filter(r => r.Classification === "High risk");
+          title = `High Risk NCs for ${quarterName}`;
+      } else if (type === 'reoccurring') {
+          recordsToShow = quarterInfo.records.filter(r => r.Reoccurrence === "YES");
+          title = `Reoccurring NCs for ${quarterName}`;
+      } else {
+          title = `All NCs for ${quarterName}`;
+      }
+
+      setDialogData({ title, data: recordsToShow });
+  };
+
   
   const detailColumns: DataTableColumn<NonConformanceData>[] = [
     { accessorKey: 'Id', header: 'ID', cell: (row) => row.Id },
     { accessorKey: 'Non Conformance Title', header: 'Title', cell: (row) => row["Non Conformance Title"] },
+    { accessorKey: 'Status', header: 'Status', cell: (row) => {
+        const isOverdue = row.Status === 'Deadline Exceeded';
+        return isOverdue 
+            ? <Badge variant="destructive">Deadline Exceeded</Badge> 
+            : <Badge variant="secondary">{row.Status}</Badge>
+    }},
     { accessorKey: 'Registered By', header: 'Registered By', cell: (row) => row["Registered By"] },
     { accessorKey: 'Case Worker', header: 'Case Worker', cell: (row) => row["Case Worker"] },
     { accessorKey: 'Registration Time', header: 'Registration Time', cell: (row) => row["Registration Time"] },
@@ -187,16 +222,33 @@ export default function NonConformanceDashboard() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={filteredChartData} onClick={handleBarClick}>
+            <BarChart data={filteredChartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
-              <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-              <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
+              <YAxis stroke="#8884d8" />
               <Tooltip />
               <Legend />
-              <Bar yAxisId="right" dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-2))" cursor="pointer" />
-              <Bar yAxisId="right" dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-5))" cursor="pointer" />
-              <Bar yAxisId="left" dataKey="total" name="Total NCs" fill="hsl(var(--chart-1))" cursor="pointer" />
+              <Bar 
+                dataKey="lowRisk" 
+                name="Low Risk" 
+                fill="hsl(var(--chart-2))" 
+                cursor="pointer" 
+                onClick={(data) => handleSpecificBarClick(data, 'low')}
+              />
+              <Bar 
+                dataKey="highRisk" 
+                name="High Risk" 
+                fill="hsl(var(--chart-5))" 
+                cursor="pointer" 
+                onClick={(data) => handleSpecificBarClick(data, 'high')}
+              />
+              <Bar 
+                dataKey="total" 
+                name="Total NCs" 
+                fill="hsl(var(--chart-1))" 
+                cursor="pointer" 
+                onClick={(data) => handleSpecificBarClick(data, 'total')}
+              />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -208,13 +260,21 @@ export default function NonConformanceDashboard() {
           </CardHeader>
           <CardContent>
              <ResponsiveContainer width="100%" height={350}>
-                 <LineChart data={filteredChartData} onClick={handleBarClick}>
+                 <LineChart data={filteredChartData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="reoccurring" name="Reoccurring" stroke="hsl(var(--chart-1))" strokeWidth={2} cursor="pointer" />
+                    <Line 
+                        type="monotone" 
+                        dataKey="reoccurring" 
+                        name="Reoccurring" 
+                        stroke="hsl(var(--chart-1))" 
+                        strokeWidth={2} 
+                        cursor="pointer" 
+                        activeDot={{ r: 8, onClick: (e, payload) => handleSpecificBarClick(payload.payload, 'reoccurring') }}
+                    />
                  </LineChart>
             </ResponsiveContainer>
           </CardContent>
