@@ -57,6 +57,15 @@ export default function CompendiumDashboard() {
     });
 
     nonConformanceData.forEach(item => {
+      // Filter by team if selected
+      if (teamFilter === 'production') {
+          const worker = item["Case Worker"];
+          const registeredBy = item["Registered By"];
+          if (!productionTeam.includes(worker) && !productionTeam.includes(registeredBy)) {
+              return;
+          }
+      }
+
       const date = parseDate(item["Registration Time"]);
       if (!isValid(date)) return;
       
@@ -75,7 +84,7 @@ export default function CompendiumDashboard() {
     });
 
     return Object.entries(aggregated).map(([key, value]) => ({ name: key, ...value }));
-  }, [nonConformanceData]);
+  }, [nonConformanceData, teamFilter, productionTeam]);
 
 
   // --- Overdue Logic ---
@@ -142,7 +151,10 @@ export default function CompendiumDashboard() {
       {/* Top Section: Non-Conformance Overview */}
       <div className="grid gap-6 lg:grid-cols-2">
         <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">NC Risk & Volume (Current & Prev. Year)</h3>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">NC Risk & Volume (Current & Prev. Year)</h3>
+                {/* Team filter is global for the page, but we show context here */}
+            </div>
             <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={ncChartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
