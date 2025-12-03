@@ -33,31 +33,54 @@ interface ProcessedTrainingRecord {
   pendingStep: string;
 }
 
+// Updated to match the robust list from the CAPA module
 const DATE_FORMATS = [
-  'dd/MM/yyyy',
-  'dd.MM.yyyy',
-  'M/d/yyyy',
-  'MM/dd/yyyy'
+  'dd/MM/yyyy', 
+  'd/M/yyyy',
+  'dd.MM.yyyy', 
+  'd.M.yyyy',
+  'yyyy-MM-dd',
+  // Abbreviated Month Formats
+  'dd.MMM.yy',
+  'dd MMM yy',
+  'dd-MMM-yy',
+  'd MMM yyyy',
+  'd-MMM-yyyy',
+  'dd.MMM.yyyy',
+  'dd MMM yyyy',
+  // US formats
+  'M/d/yyyy', 
+  'MM/dd/yyyy',
+  'M-d-yyyy', 
+  'MM-dd-yyyy',
 ];
 
+// Updated parsing logic to handle invisible characters and edge cases
 const parseTrainingDate = (dateString: string): Date => {
   if (!dateString) return new Date('invalid');
 
-  const slashParts = dateString.split('/');
-  if (slashParts.length === 3) {
-      const day = parseInt(slashParts[0], 10);
-      const month = parseInt(slashParts[1], 10) - 1; 
-      const year = parseInt(slashParts[2], 10);
-      const date = new Date(year, month, day);
-      if (isValid(date)) return date;
+  // 1. Clean the string: remove invisible characters (BOM, zero-width spaces) and whitespace
+  const cleanString = dateString.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+
+  // 2. Specific handling for DD.MM.YYYY to avoid ambiguity
+  const ddMMyyyy = cleanString.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (ddMMyyyy) {
+    const [, day, month, year] = ddMMyyyy;
+    const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
+    if (isValid(parsed)) return parsed;
   }
 
+  // 3. Try parsing with date-fns using the expanded format list
   for (const formatStr of DATE_FORMATS) {
-    const parsed = parse(dateString.trim(), formatStr, new Date());
+    const parsed = parse(cleanString, formatStr, new Date());
     if (isValid(parsed)) {
       return parsed;
     }
   }
+
+  // 4. Fallback: Native Date parsing (ISO strings)
+  const nativeDate = new Date(cleanString);
+  if (isValid(nativeDate)) return nativeDate;
 
   return new Date('invalid');
 }
