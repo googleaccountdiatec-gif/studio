@@ -271,14 +271,14 @@ export default function TrainingDashboard() {
                     <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0} />
                     <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
                     <Legend />
-                    {/* 1. Completed: The success state (Green/Teal) */}
-                    <Bar dataKey="completed" name="Completed" stackId="a" fill="hsl(var(--chart-5))" />
+                    {/* 1. Completed: The success state  */}
+                    <Bar dataKey="completed" name="Completed" stackId="a" fill="hsl(var(--chart-4))" />
                     
                     {/* 2. Pending: Soft, light pink (The "Curida" secondary color) */}
-                    <Bar dataKey="pending" name="Pending" stackId="a" fill="hsl(var(--chart-4))" />
+                    <Bar dataKey="pending" name="Pending" stackId="a" fill="hsl(var(--chart-2))" />
                     
-                    {/* 3. Overdue: Heavy, dominant Red (The "Curida" primary/chart-2) */}
-                    <Bar dataKey="overdue" name="Overdue" stackId="a" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
+                    {/* 3. Overdue: Heavy, dominant Red (The "Curida" primary/chart-1) */}
+                    <Bar dataKey="overdue" name="Overdue" stackId="a" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
                 </BarChart>
             </ResponsiveContainer>
         </GlassCard>

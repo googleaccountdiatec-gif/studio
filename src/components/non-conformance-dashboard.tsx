@@ -226,7 +226,7 @@ export default function NonConformanceDashboard() {
                 onClick={(data) => handleSpecificBarClick(data, 'high')}
               />
               
-              {/* TOTAL: The Dominant Master Black (--chart-1) */}
+              {/* TOTAL: The Dominant Black (--chart-1) */}
               <Bar 
                 dataKey="total" 
                 name="Total NCs" 
