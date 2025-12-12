@@ -208,7 +208,7 @@ export default function NonConformanceDashboard() {
               />
               <Legend />
               
-              {/* LOW RISK: Soft Submissive Pink (--chart-4) */}
+              {/* LOW RISK: Soft Pink (--chart-4) */}
               <Bar 
                 dataKey="lowRisk" 
                 name="Low Risk" 
