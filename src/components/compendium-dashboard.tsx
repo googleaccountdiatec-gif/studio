@@ -3,13 +3,14 @@
 import React, { useMemo, useState } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
-import { parse, isValid, startOfDay, isAfter, getQuarter, startOfYear, subYears, isWithinInterval, endOfYear } from 'date-fns';
+import { parse, isValid, startOfDay, isAfter, getQuarter, subWeeks } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts';
 import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
+import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 
-// Helper functions (reused from other modules to ensure consistency)
+// Helper functions
 const parseDate = (dateString: string): Date => {
   if (!dateString) return new Date('invalid');
   const formats = ["dd/MM/yyyy hh:mm a", "dd/MM/yyyy H:mm", "dd/MM/yyyy", 'M/d/yyyy', 'MM/dd/yyyy', 'dd.MM.yyyy'];
@@ -34,7 +35,6 @@ const parseTrainingDate = (row: any): Date => {
     return deadline;
 }
 
-
 export default function CompendiumDashboard() {
   const { capaData, changeActionData, nonConformanceData, trainingData } = useData();
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
@@ -57,7 +57,6 @@ export default function CompendiumDashboard() {
     });
 
     nonConformanceData.forEach(item => {
-      // Filter by team if selected
       if (teamFilter === 'production') {
           const worker = item["Case Worker"];
           const registeredBy = item["Registered By"];
@@ -87,56 +86,53 @@ export default function CompendiumDashboard() {
   }, [nonConformanceData, teamFilter, productionTeam]);
 
 
-  // --- Overdue Logic ---
-  const overdueData = useMemo(() => {
-    const today = startOfDay(new Date());
+  // --- Helper: Calculate Overdue Counts ---
+  const getOverdueSnapshot = (referenceDate: Date) => {
     let capaExecution = 0;
     let capaEffectiveness = 0;
     let changeActions = 0;
     let training = 0;
     let nonConformance = 0;
 
-    // CAPA Overdue
+    // CAPA
     capaData.forEach(item => {
        if (teamFilter === 'production' && !productionTeam.includes(item['Assigned To'])) return;
-       if (!item['Pending Steps'] || item['Pending Steps'].trim() === '') return; // Completed
+       if (!item['Pending Steps'] || item['Pending Steps'].trim() === '') return;
 
        const isEffectiveness = item['Pending Steps']?.toLowerCase().includes('effectiveness');
        const dateString = isEffectiveness ? item['Deadline for effectiveness check'] : item['Due Date'];
        const dueDate = parseDate(dateString);
 
-       if (isValid(dueDate) && isAfter(today, dueDate)) {
+       if (isValid(dueDate) && isAfter(referenceDate, dueDate)) {
            if (isEffectiveness) capaEffectiveness++;
            else capaExecution++;
        }
     });
 
-    // Change Action Overdue
+    // Change Actions
     changeActionData.forEach(item => {
         if (teamFilter === 'production' && !productionTeam.includes(item['Responsible'])) return;
         if (!item['Pending Steps'] || item['Pending Steps'].trim() === '') return;
 
         const deadline = parseDate(item.Deadline);
-        if (isValid(deadline) && isAfter(today, deadline)) {
+        if (isValid(deadline) && isAfter(referenceDate, deadline)) {
             changeActions++;
         }
     });
 
-    // Training Overdue
+    // Training
     trainingData.forEach(item => {
-        // Parse trainee name from "Trainee" column
         if (teamFilter === 'production' && !productionTeam.includes(item['Trainee'])) return;
-        
         const pendingSteps = item['Pending Steps']?.trim();
-        if (!pendingSteps) return; // Completed
+        if (!pendingSteps) return;
 
         const deadline = parseTrainingDate(item);
-        if (isValid(deadline) && isAfter(today, deadline)) {
+        if (isValid(deadline) && isAfter(referenceDate, deadline)) {
             training++;
         }
     });
 
-    // Non-Conformance Overdue
+    // Non-Conformance
     nonConformanceData.forEach(item => {
         if (teamFilter === 'production') {
             const worker = item["Case Worker"];
@@ -145,43 +141,54 @@ export default function CompendiumDashboard() {
                 return;
             }
         }
-        
-        // Check for "Deadline Exceeded" status
         if (item.Status === 'Deadline Exceeded') {
             nonConformance++;
         }
     });
 
-    // --- OVERDUE COLORS (The Heat Map of Failure) ---
-    return [
-        // Non-Conformance: The Red Danger (--chart-2)
-        { name: 'Non-Conformance', count: nonConformance, fill: 'hsl(var(--chart-2))' },
-        
-        // CAPA Exec: The Heavy Duty Black (--chart-1)
-        { name: 'CAPA (Exec)', count: capaExecution, fill: 'hsl(var(--chart-1))' },
-        
-        // CAPA Eff: The Warning Orange (--chart-3)
-        { name: 'CAPA (Eff)', count: capaEffectiveness, fill: 'hsl(var(--chart-3))' },
-        
-        // Change Actions: The Hot Pink (--primary) - Urgent
-        { name: 'Change Actions', count: changeActions, fill: 'hsl(var(--primary))' },
-        
-        // Training: The Soft Pink (--chart-4) - Least "Dangerous" but still annoying
-        { name: 'Training', count: training, fill: 'hsl(var(--chart-4))' },
-    ];
+    return { nonConformance, capaExecution, capaEffectiveness, changeActions, training };
+  };
 
-  }, [capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]);
+  // --- Overdue Data (Current) ---
+  const overdueData = useMemo(() => {
+    const today = startOfDay(new Date());
+    const counts = getOverdueSnapshot(today);
+
+    return [
+        { name: 'Non-Conformance', count: counts.nonConformance, fill: 'hsl(var(--chart-2))' },
+        { name: 'CAPA (Exec)', count: counts.capaExecution, fill: 'hsl(var(--chart-1))' },
+        { name: 'CAPA (Eff)', count: counts.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
+        { name: 'Change Actions', count: counts.changeActions, fill: 'hsl(var(--primary))' },
+        { name: 'Training', count: counts.training, fill: 'hsl(var(--chart-4))' },
+    ];
+  }, [capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- Bi-Weekly Changes (Formatted with Colors) ---
+  const biWeeklyChanges = useMemo(() => {
+    const today = startOfDay(new Date());
+    const twoWeeksAgo = subWeeks(today, 2);
+    
+    const currentCounts = getOverdueSnapshot(today);
+    const pastCounts = getOverdueSnapshot(twoWeeksAgo);
+
+    // We include the 'fill' color directly in this object so the text can match the graph
+    return [
+        { label: 'Non-Conformance', delta: currentCounts.nonConformance - pastCounts.nonConformance, fill: 'hsl(var(--chart-2))' },
+        { label: 'CAPA (Exec)', delta: currentCounts.capaExecution - pastCounts.capaExecution, fill: 'hsl(var(--chart-1))' },
+        { label: 'CAPA (Eff)', delta: currentCounts.capaEffectiveness - pastCounts.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
+        { label: 'Change Actions', delta: currentCounts.changeActions - pastCounts.changeActions, fill: 'hsl(var(--primary))' },
+        { label: 'Training', delta: currentCounts.training - pastCounts.training, fill: 'hsl(var(--chart-4))' },
+    ];
+  }, [capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   return (
     <div className="space-y-6">
       
-      {/* Top Section: Non-Conformance Overview */}
+      {/* Top Section */}
       <div className="grid gap-6 lg:grid-cols-2">
         <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">NC Risk & Volume (Current & Prev. Year)</h3>
-            </div>
+            <h3 className="text-lg font-semibold mb-4">NC Risk & Volume (Current & Prev. Year)</h3>
             <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={ncChartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -189,14 +196,8 @@ export default function CompendiumDashboard() {
                     <YAxis width={30} tick={{fontSize: 10}} />
                     <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
                     <Legend wrapperStyle={{fontSize: '12px'}} />
-                    
-                    {/* LOW RISK: Soft Pink (--chart-4) */}
                     <Bar dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-4))"  />
-                    
-                    {/* HIGH RISK: Aggressive Red (--chart-2) */}
                     <Bar dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-2))"  />
-                    
-                    {/* TOTAL: Dominant Black (--chart-1) */}
                     <Bar dataKey="total" name="Total" fill="hsl(var(--chart-1))"  />
                 </BarChart>
             </ResponsiveContainer>
@@ -211,16 +212,15 @@ export default function CompendiumDashboard() {
                     <YAxis width={30} tick={{fontSize: 10}} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
                     <Legend wrapperStyle={{fontSize: '12px'}} />
-                    {/* REOCCURRING: Bright Primary Red Line */}
                     <Line type="monotone" dataKey="reoccurring" name="Reoccurring" stroke="hsl(var(--primary))" strokeWidth={2} dot={{r: 4}} />
                  </LineChart>
             </ResponsiveContainer>
         </GlassCard>
       </div>
 
-      {/* Bottom Section: Overdue Metrics */}
+      {/* Bottom Section: Overdue Metrics & Changes */}
       <GlassCard className="p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold">Total Overdue Overview</h3>
              <RadioGroup value={teamFilter} onValueChange={(value) => setTeamFilter(value as any)} className="flex items-center gap-4">
                 <div className="flex items-center space-x-2">
@@ -234,20 +234,45 @@ export default function CompendiumDashboard() {
             </RadioGroup>
         </div>
         
-        <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={overdueData} layout="vertical" margin={{ left: 20, right: 30 }}>
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12, fontWeight: 500 }} />
-                <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
-                <Bar dataKey="count" name="Overdue Items" radius={[0, 4, 4, 0]} barSize={40} label={{ position: 'right', fill: 'hsl(var(--foreground))', fontSize: 12, offset: 5 }}>
-                    {
-                        overdueData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))
-                    }
-                </Bar>
-            </BarChart>
-        </ResponsiveContainer>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Chart Area */}
+            <div className="md:col-span-2 h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={overdueData} layout="vertical" margin={{ left: 20, right: 30 }}>
+                        <XAxis type="number" hide />
+                        <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12, fontWeight: 500 }} />
+                        <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
+                        <Bar dataKey="count" name="Overdue Items" radius={[0, 4, 4, 0]} barSize={40} label={{ position: 'right', fill: 'hsl(var(--foreground))', fontSize: 12, offset: 5 }}>
+                            {
+                                overdueData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                ))
+                            }
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+
+            {/* Change List Area */}
+            <div className="flex flex-col justify-center space-y-4 border-l pl-8 border-border/50">
+                <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2">Change Since Last Bi-Weekly</h4>
+                {biWeeklyChanges.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{item.label}</span>
+                        {/* We apply the specific graph color to this text block */}
+                        <div 
+                            className="flex items-center gap-1 font-bold"
+                            style={{ color: item.fill }}
+                        >
+                            {item.delta > 0 && <ArrowUp className="w-4 h-4" />}
+                            {item.delta < 0 && <ArrowDown className="w-4 h-4" />}
+                            {item.delta === 0 && <Minus className="w-4 h-4" />}
+                            <span>{Math.abs(item.delta)}</span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
       </GlassCard>
 
     </div>
