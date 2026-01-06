@@ -3,44 +3,84 @@
 import React, { useMemo, useState } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
-import { parse, isValid, startOfDay, isAfter, getQuarter, subWeeks } from 'date-fns';
+import { parse, isValid, startOfDay, isAfter, getQuarter, subWeeks, isBefore, endOfDay } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts';
 import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 
-// Helper functions
-const parseDate = (dateString: string): Date => {
+// --- Helper Functions ---
+
+const parseDate = (dateString: any): Date => {
   if (!dateString) return new Date('invalid');
-  const formats = ["dd/MM/yyyy hh:mm a", "dd/MM/yyyy H:mm", "dd/MM/yyyy", 'M/d/yyyy', 'MM/dd/yyyy', 'dd.MM.yyyy'];
+  const str = String(dateString).trim();
+  
+  // Try strictly formatted parses first
+  const formats = [
+    "dd.MM.yyyy HH:mm:ss", 
+    "dd.MM.yyyy HH:mm",
+    "dd.MM.yyyy",
+    "dd/MM/yyyy hh:mm a",
+    "dd/MM/yyyy HH:mm", 
+    "dd/MM/yyyy",
+    "yyyy-MM-dd",
+  ];
+
   for (const fmt of formats) {
-    const parsed = parse(dateString.trim(), fmt, new Date());
+    const parsed = parse(str, fmt, new Date());
     if (isValid(parsed)) return parsed;
   }
-  const isoParsed = new Date(dateString);
+
+  // Fallback to standard Date constructor (handles ISO etc)
+  const isoParsed = new Date(str);
   if (isValid(isoParsed)) return isoParsed;
+  
   return new Date('invalid');
 };
 
-const parseTrainingDate = (row: any): Date => {
-    let deadline = new Date('invalid');
-    const dateParts = row['Deadline for completing training']?.split('/');
-    if (dateParts && dateParts.length === 3) {
-        deadline = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
+/**
+ * Determines if an item was overdue relative to a specific reference date.
+ * * @param deadlineStr - The deadline string from the data.
+ * @param completedDateStr - The completion date string from the data.
+ * @param referenceDate - The date we are checking against (e.g., Today or 2 Weeks Ago).
+ * @returns true if the task was Open AND Past Deadline at the reference moment.
+ */
+const isTaskOverdue = (deadlineStr: any, completedDateStr: any, referenceDate: Date): boolean => {
+    const deadline = parseDate(deadlineStr);
+    
+    // If no valid deadline exists, it cannot be calculated as overdue
+    if (!isValid(deadline)) return false;
+
+    // 1. Check if the deadline had passed by the reference date
+    // We strictly check if Deadline < ReferenceDate. 
+    // (e.g. if Deadline is Today and Reference is Today, it is usually NOT overdue yet, depending on precision. 
+    // We assume deadline is end of day, so strict comparison is safer).
+    if (!isBefore(deadline, referenceDate)) return false;
+
+    // 2. Check if it was completed *before* the reference date
+    const completedAt = parseDate(completedDateStr);
+    
+    if (isValid(completedAt)) {
+        // If it was completed, and the completion happened BEFORE or ON the reference date,
+        // then it was NOT overdue at that time (it was already done).
+        if (isBefore(completedAt, referenceDate) || completedAt.getTime() === referenceDate.getTime()) {
+            return false;
+        }
     }
-    if (!isValid(deadline)) {
-        deadline = parse(row['Deadline for completing training'], 'dd/MM/yyyy', new Date());
-    }
-    return deadline;
-}
+
+    // If we are here:
+    // a) Reference date is strictly AFTER the deadline
+    // b) It wasn't completed yet (or completion date is in the future relative to ref date)
+    return true;
+};
 
 export default function CompendiumDashboard() {
   const { capaData, changeActionData, nonConformanceData, trainingData } = useData();
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const productionTeam = getProductionTeam();
 
-  // --- Non-Conformance Logic ---
+  // --- Non-Conformance Chart Logic ---
   const ncChartData = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const previousYear = currentYear - 1;
@@ -97,13 +137,16 @@ export default function CompendiumDashboard() {
     // CAPA
     capaData.forEach(item => {
        if (teamFilter === 'production' && !productionTeam.includes(item['Assigned To'])) return;
-       if (!item['Pending Steps'] || item['Pending Steps'].trim() === '') return;
+       
+       const pendingSteps = item['Pending Steps']?.trim() || "";
+       const isEffectiveness = pendingSteps.toLowerCase().includes('effectiveness');
+       
+       // Use "Deadline for effectiveness check" if present, otherwise "Due Date"
+       // This handles completed items correctly by checking the relevant deadline field.
+       const deadlineStr = item['Deadline for effectiveness check'] || item['Due Date'];
 
-       const isEffectiveness = item['Pending Steps']?.toLowerCase().includes('effectiveness');
-       const dateString = isEffectiveness ? item['Deadline for effectiveness check'] : item['Due Date'];
-       const dueDate = parseDate(dateString);
-
-       if (isValid(dueDate) && isAfter(referenceDate, dueDate)) {
+       if (isTaskOverdue(deadlineStr, item['Completed On'], referenceDate)) {
+           // We classify based on current pending step or default to Exec if unknown
            if (isEffectiveness) capaEffectiveness++;
            else capaExecution++;
        }
@@ -112,10 +155,8 @@ export default function CompendiumDashboard() {
     // Change Actions
     changeActionData.forEach(item => {
         if (teamFilter === 'production' && !productionTeam.includes(item['Responsible'])) return;
-        if (!item['Pending Steps'] || item['Pending Steps'].trim() === '') return;
-
-        const deadline = parseDate(item.Deadline);
-        if (isValid(deadline) && isAfter(referenceDate, deadline)) {
+        
+        if (isTaskOverdue(item['Deadline'], item['Completed On'], referenceDate)) {
             changeActions++;
         }
     });
@@ -123,16 +164,15 @@ export default function CompendiumDashboard() {
     // Training
     trainingData.forEach(item => {
         if (teamFilter === 'production' && !productionTeam.includes(item['Trainee'])) return;
-        const pendingSteps = item['Pending Steps']?.trim();
-        if (!pendingSteps) return;
-
-        const deadline = parseTrainingDate(item);
-        if (isValid(deadline) && isAfter(referenceDate, deadline)) {
+        
+        if (isTaskOverdue(item['Deadline for completing training'], item['Completed On'], referenceDate)) {
             training++;
         }
     });
 
     // Non-Conformance
+    // NC Data often lacks a specific "Due Date" column. We rely on Status for current snapshot.
+    // We cannot accurately calculate historical overdue for NC without a deadline date.
     nonConformanceData.forEach(item => {
         if (teamFilter === 'production') {
             const worker = item["Case Worker"];
@@ -141,8 +181,19 @@ export default function CompendiumDashboard() {
                 return;
             }
         }
-        if (item.Status === 'Deadline Exceeded') {
-            nonConformance++;
+
+        // Check if we are calculating "Current" (approx today)
+        const isCurrentSnapshot = Math.abs(referenceDate.getTime() - new Date().getTime()) < 86400000;
+
+        if (isCurrentSnapshot) {
+            // For current status, we trust the system status
+            if (item['Status'] === 'Deadline Exceeded') {
+                nonConformance++;
+            }
+        } else {
+            // For historical, without a Deadline column, we return 0 (or N/A) to avoid "wildly wrong" data.
+            // If the data is updated with a 'Due Date' column later, we can use:
+            // if (isTaskOverdue(item['Due Date'], item['Completed On'], referenceDate)) nonConformance++;
         }
     });
 
@@ -151,7 +202,7 @@ export default function CompendiumDashboard() {
 
   // --- Overdue Data (Current) ---
   const overdueData = useMemo(() => {
-    const today = startOfDay(new Date());
+    const today = new Date();
     const counts = getOverdueSnapshot(today);
 
     return [
@@ -163,17 +214,21 @@ export default function CompendiumDashboard() {
     ];
   }, [capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- Bi-Weekly Changes (Formatted with Colors) ---
+  // --- Bi-Weekly Changes ---
   const biWeeklyChanges = useMemo(() => {
-    const today = startOfDay(new Date());
+    const today = new Date();
     const twoWeeksAgo = subWeeks(today, 2);
     
     const currentCounts = getOverdueSnapshot(today);
     const pastCounts = getOverdueSnapshot(twoWeeksAgo);
 
-    // We include the 'fill' color directly in this object so the text can match the graph
     return [
-        { label: 'Non-Conformance', delta: currentCounts.nonConformance - pastCounts.nonConformance, fill: 'hsl(var(--chart-2))' },
+        { 
+            label: 'Non-Conformance', 
+            // Since we can't reliably calc history for NC, we show 0 change or handle strictly
+            delta: currentCounts.nonConformance > 0 && pastCounts.nonConformance === 0 ? 0 : currentCounts.nonConformance - pastCounts.nonConformance, 
+            fill: 'hsl(var(--chart-2))' 
+        },
         { label: 'CAPA (Exec)', delta: currentCounts.capaExecution - pastCounts.capaExecution, fill: 'hsl(var(--chart-1))' },
         { label: 'CAPA (Eff)', delta: currentCounts.capaEffectiveness - pastCounts.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
         { label: 'Change Actions', delta: currentCounts.changeActions - pastCounts.changeActions, fill: 'hsl(var(--primary))' },
@@ -259,7 +314,6 @@ export default function CompendiumDashboard() {
                 {biWeeklyChanges.map((item) => (
                     <div key={item.label} className="flex items-center justify-between">
                         <span className="text-sm font-medium">{item.label}</span>
-                        {/* We apply the specific graph color to this text block */}
                         <div 
                             className="flex items-center gap-1 font-bold"
                             style={{ color: item.fill }}
