@@ -8,7 +8,10 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cart
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileUp } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { FileUp, CalendarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface BatchReleaseData {
@@ -21,18 +24,6 @@ interface BatchReleaseData {
   'Clone name': string;
   'Company': string;
   'Company aliases': string;
-}
-
-interface ProcessedBatch {
-  id: string;
-  status: string;
-  completedDate: Date;
-  highRiskNC: number;
-  lowRiskNC: number;
-  productionType: string;
-  cloneName: string;
-  company: string;
-  aliases: string;
 }
 
 const DATE_FORMATS = [
@@ -60,7 +51,10 @@ export default function BatchReleaseDashboard() {
   const [prodTypeFilter, setProdTypeFilter] = useState<string>('all');
   const [cloneFilter, setCloneFilter] = useState<string>('');
   const [customerFilter, setCustomerFilter] = useState<string>('');
-  const [yearFilter, setYearFilter] = useState<string>('default');
+  
+  // Year Selection State (Default to Current & Previous Year)
+  const currentRealYear = new Date().getFullYear();
+  const [selectedYears, setSelectedYears] = useState<number[]>([currentRealYear, currentRealYear - 1]);
 
   const processedData = useMemo(() => {
     return batchReleaseData
@@ -96,19 +90,12 @@ export default function BatchReleaseDashboard() {
     });
   }, [processedData, prodTypeFilter, cloneFilter, customerFilter]);
 
-  // Available years in the filtered dataset
+  // Available years in the dataset + Current Year (always include current year)
   const availableYears = useMemo(() => {
     const years = new Set(filteredData.map(item => getYear(item.completedDate)));
+    years.add(currentRealYear); 
     return Array.from(years).sort((a, b) => b - a);
-  }, [filteredData]);
-
-  // Determine current/previous years based on data
-  const { currentYear, previousYear } = useMemo(() => {
-      if (availableYears.length === 0) return { currentYear: new Date().getFullYear(), previousYear: new Date().getFullYear() - 1 };
-      const max = Math.max(...availableYears);
-      return { currentYear: max, previousYear: max - 1 };
-  }, [availableYears]);
-
+  }, [filteredData, currentRealYear]);
 
   // Active Filters Display
   const activeFilters = useMemo(() => {
@@ -130,56 +117,37 @@ export default function BatchReleaseDashboard() {
   // --- Visualization 1: Monthly Approved Batches ---
   const monthlyChartData = useMemo(() => {
     const months = Array.from({ length: 12 }, (_, i) => {
-      const date = new Date(currentYear, i, 1); // Use currentYear for label context
+      const date = new Date(currentRealYear, i, 1); 
       const entry: any = {
         name: format(date, 'MMM'),
         monthIndex: i,
       };
-      // Initialize counts for relevant years based on filter
-      if (yearFilter === 'default') {
-          entry[currentYear] = 0;
-          entry[previousYear] = 0;
-      } else if (yearFilter === 'all') {
-          availableYears.forEach(y => entry[y] = 0);
-      } else {
-          entry[yearFilter] = 0;
-      }
+      
+      // Initialize counts for all selected years
+      selectedYears.forEach(y => {
+          entry[y] = 0;
+      });
+      
       return entry;
     });
 
     filteredData.forEach(item => {
       const year = getYear(item.completedDate);
-      const month = getMonth(item.completedDate);
-      
-      if (yearFilter === 'default') {
-          if (year === currentYear || year === previousYear) {
-              months[month][year]++;
-          }
-      } else if (yearFilter === 'all') {
-          if (availableYears.includes(year)) {
-              months[month][year]++;
-          }
-      } else {
-          if (String(year) === yearFilter) {
-              months[month][year]++;
-          }
+      // Only aggregate if the year is currently selected
+      if (selectedYears.includes(year)) {
+          const month = getMonth(item.completedDate);
+          months[month][year]++;
       }
     });
 
     return months;
-  }, [filteredData, yearFilter, availableYears, currentYear, previousYear]);
+  }, [filteredData, selectedYears, currentRealYear]);
 
   // --- KPI Metrics: Average Non-Conformances ---
   const kpiMetrics = useMemo(() => {
     const metricsData = filteredData.filter(item => {
         const year = getYear(item.completedDate);
-        if (yearFilter === 'default') {
-            return year === currentYear || year === previousYear;
-        } else if (yearFilter === 'all') {
-            return true;
-        } else {
-            return String(year) === yearFilter;
-        }
+        return selectedYears.includes(year);
     });
 
     const totalBatches = metricsData.length;
@@ -193,7 +161,7 @@ export default function BatchReleaseDashboard() {
       high: (totalHigh / totalBatches).toFixed(2),
       total: ((totalLow + totalHigh) / totalBatches).toFixed(2)
     };
-  }, [filteredData, yearFilter, currentYear, previousYear]);
+  }, [filteredData, selectedYears]);
 
 
   if (batchReleaseData.length === 0) {
@@ -206,30 +174,30 @@ export default function BatchReleaseDashboard() {
     );
   }
 
-  // Helper to get chart bars based on filter
+  // Helper to get chart bars based on selected years
   const getChartBars = () => {
-      if (yearFilter === 'default') {
-          return [
-              <Bar key={previousYear} dataKey={previousYear} name={`${previousYear}`} fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey={previousYear} position="top" fill="hsl(var(--foreground))" fontSize={10} formatter={(value: any) => value > 0 ? value : ''} />
-              </Bar>,
-              <Bar key={currentYear} dataKey={currentYear} name={`${currentYear}`} fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey={currentYear} position="top" fill="hsl(var(--foreground))" fontSize={10} formatter={(value: any) => value > 0 ? value : ''} />
-              </Bar>
-          ];
-      } else if (yearFilter === 'all') {
-          return availableYears.map((year, index) => (
-              <Bar key={year} dataKey={year} name={`${year}`} fill={`hsl(var(--chart-${(index % 5) + 1}))`} radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey={year} position="top" fill="hsl(var(--foreground))" fontSize={10} formatter={(value: any) => value > 0 ? value : ''} />
-              </Bar>
-          ));
-      } else {
-           return [
-               <Bar key={yearFilter} dataKey={yearFilter} name={`${yearFilter}`} fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]}>
-                   <LabelList dataKey={yearFilter} position="top" fill="hsl(var(--foreground))" fontSize={10} formatter={(value: any) => value > 0 ? value : ''} />
-               </Bar>
-           ];
-      }
+      // Sort selected years to keep bar order consistent
+      const sortedYears = [...selectedYears].sort((a, b) => a - b);
+      
+      return sortedYears.map((year, index) => (
+          <Bar 
+            key={year} 
+            dataKey={year} 
+            name={`${year}`} 
+            fill={`hsl(var(--chart-${(index % 5) + 1}))`} 
+            radius={[4, 4, 0, 0]}
+          >
+              <LabelList dataKey={year} position="top" fill="hsl(var(--foreground))" fontSize={10} formatter={(value: any) => value > 0 ? value : ''} />
+          </Bar>
+      ));
+  };
+
+  const toggleYear = (year: number) => {
+    setSelectedYears(prev => 
+        prev.includes(year) 
+            ? prev.filter(y => y !== year)
+            : [...prev, year]
+    );
   };
 
   return (
@@ -268,48 +236,73 @@ export default function BatchReleaseDashboard() {
                 />
             </div>
              <div className="space-y-2">
-                <Label>Period</Label>
-                <Select value={yearFilter} onValueChange={setYearFilter}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select Period" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="default">Current & Previous Year</SelectItem>
-                        <SelectItem value="all">All Time</SelectItem>
-                        {availableYears.map(year => (
-                            <SelectItem key={year} value={String(year)}>{year}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                <Label>Years</Label>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start text-left font-normal">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {selectedYears.length > 0 
+                                ? `${selectedYears.length} year${selectedYears.length !== 1 ? 's' : ''} selected` 
+                                : "Select years"}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-2" align="start">
+                        <div className="space-y-2">
+                            <h4 className="font-medium leading-none text-sm mb-2 text-muted-foreground px-2">Select years to compare</h4>
+                            <div className="grid gap-2">
+                                {availableYears.map(year => (
+                                    <div key={year} className="flex items-center space-x-2 px-2 py-1 rounded hover:bg-muted/50">
+                                        <Checkbox 
+                                            id={`year-${year}`} 
+                                            checked={selectedYears.includes(year)}
+                                            onCheckedChange={() => toggleYear(year)}
+                                        />
+                                        <Label htmlFor={`year-${year}`} className="flex-1 cursor-pointer">{year}</Label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </PopoverContent>
+                </Popover>
             </div>
         </div>
       </GlassCard>
 
       {/* Active Filter Display */}
-      {(cloneFilter || customerFilter) && (
+      {(cloneFilter || customerFilter || selectedYears.length > 0) && (
         <div className="space-y-2">
-            <div className="flex flex-wrap gap-2">
-                {activeFilters.clones.length > 0 && (
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Clones:</span>
-                        {activeFilters.clones.slice(0, 15).map(clone => (
-                            <Badge key={clone} variant="secondary">{clone}</Badge>
+            <div className="flex flex-wrap gap-2 items-center">
+                 <span className="text-sm text-muted-foreground mr-2">Active Filters:</span>
+                 {selectedYears.length > 0 && (
+                     <div className="flex items-center gap-1">
+                        {selectedYears.sort().map(year => (
+                            <Badge key={year} variant="secondary" className="px-2">{year}</Badge>
                         ))}
-                        {activeFilters.clones.length > 15 && <span className="text-xs text-muted-foreground">+{activeFilters.clones.length - 15} more</span>}
-                    </div>
-                )}
+                     </div>
+                 )}
             </div>
-            <div className="flex flex-wrap gap-2">
-                {activeFilters.customers.length > 0 && (
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Customers:</span>
-                        {activeFilters.customers.slice(0, 15).map(customer => (
-                            <Badge key={customer} variant="outline">{customer}</Badge>
-                        ))}
-                        {activeFilters.customers.length > 15 && <span className="text-xs text-muted-foreground">+{activeFilters.customers.length - 15} more</span>}
-                    </div>
-                )}
-            </div>
+            {(activeFilters.clones.length > 0 || activeFilters.customers.length > 0) && (
+                <div className="flex flex-wrap gap-4 mt-2">
+                    {activeFilters.clones.length > 0 && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Clones:</span>
+                            {activeFilters.clones.slice(0, 15).map(clone => (
+                                <Badge key={clone} variant="secondary">{clone}</Badge>
+                            ))}
+                            {activeFilters.clones.length > 15 && <span className="text-xs text-muted-foreground">+{activeFilters.clones.length - 15} more</span>}
+                        </div>
+                    )}
+                    {activeFilters.customers.length > 0 && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Customers:</span>
+                            {activeFilters.customers.slice(0, 15).map(customer => (
+                                <Badge key={customer} variant="outline">{customer}</Badge>
+                            ))}
+                            {activeFilters.customers.length > 15 && <span className="text-xs text-muted-foreground">+{activeFilters.customers.length - 15} more</span>}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
       )}
 

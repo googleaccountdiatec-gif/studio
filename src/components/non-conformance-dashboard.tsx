@@ -4,13 +4,16 @@ import React, { useState, useMemo, ChangeEvent } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { FileUp } from 'lucide-react';
+import { FileUp, CalendarIcon } from 'lucide-react';
 import { format, parse, isValid, getQuarter } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from './ui/skeleton';
 import { DataTable, DataTableColumn } from './data-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useData } from '@/contexts/data-context';
 import { getProductionTeam } from '@/lib/teams';
@@ -57,7 +60,11 @@ const parseDate = (dateString: string): Date => {
 
 export default function NonConformanceDashboard() {
   const { nonConformanceData } = useData();
-  const [yearFilter, setYearFilter] = useState<'all' | 'current' | 'previous' | 'current-previous'>('current-previous');
+  
+  // Multi-Year Selection State (Default: Current & Previous)
+  const currentRealYear = new Date().getFullYear();
+  const [selectedYears, setSelectedYears] = useState<number[]>([currentRealYear, currentRealYear - 1]);
+  
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const [dialogData, setDialogData] = useState<{ title: string; data: NonConformanceData[] } | null>(null);
   const productionTeam = getProductionTeam();
@@ -78,18 +85,27 @@ export default function NonConformanceDashboard() {
     return data;
   }, [nonConformanceData, teamFilter, productionTeam]);
 
-  const quarterlyData = useMemo(() => {
-    if (allDataWithDates.length === 0) return [];
-    
-    const yearsInData = [...new Set(allDataWithDates
+  // Determine available years from data + Current Real Year
+  const availableYears = useMemo(() => {
+     const yearsInData = [...new Set(allDataWithDates
         .map(d => d.registrationDate.getFullYear())
         .filter(y => !isNaN(y))
     )];
+    // Ensure current year is included
+    if (!yearsInData.includes(currentRealYear)) {
+        yearsInData.push(currentRealYear);
+    }
+    return yearsInData.sort((a, b) => b - a);
+  }, [allDataWithDates, currentRealYear]);
 
-    if (yearsInData.length === 0) return [];
+
+  const quarterlyData = useMemo(() => {
+    if (availableYears.length === 0) return [];
     
-    const minYear = Math.min(...yearsInData);
-    const maxYear = Math.max(...yearsInData);
+    // We want to generate quarters for the full range of years found (or expected)
+    // so the chart isn't disjointed if possible, but filtering handles display.
+    const minYear = Math.min(...availableYears);
+    const maxYear = Math.max(...availableYears);
 
     const years = [];
     for (let y = minYear; y <= maxYear; y++) {
@@ -123,26 +139,16 @@ export default function NonConformanceDashboard() {
 
     return Object.entries(aggregated)
         .map(([key, value]) => ({ name: key, ...value }))
-        .filter(item => item.total > 0);
-  }, [allDataWithDates]);
+        // Don't filter out 0 totals yet, let the year selection decide display
+        .sort((a, b) => a.name.localeCompare(b.name)); 
+  }, [allDataWithDates, availableYears]);
   
   const filteredChartData = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const previousYear = currentYear - 1;
-
-    switch (yearFilter) {
-        case 'all':
-            return quarterlyData;
-        case 'current':
-            return quarterlyData.filter(q => q.name.startsWith(String(currentYear)));
-        case 'previous':
-            return quarterlyData.filter(q => q.name.startsWith(String(previousYear)));
-        case 'current-previous':
-            return quarterlyData.filter(q => q.name.startsWith(String(currentYear)) || q.name.startsWith(String(previousYear)));
-        default:
-            return quarterlyData;
-    }
-  }, [quarterlyData, yearFilter]);
+    return quarterlyData.filter(q => {
+        const year = parseInt(q.name.split('-')[0]);
+        return selectedYears.includes(year);
+    });
+  }, [quarterlyData, selectedYears]);
 
 
   const handleSpecificBarClick = (data: any, type: 'low' | 'high' | 'total' | 'reoccurring') => {
@@ -169,6 +175,13 @@ export default function NonConformanceDashboard() {
       setDialogData({ title, data: recordsToShow });
   };
 
+  const toggleYear = (year: number) => {
+    setSelectedYears(prev => 
+        prev.includes(year) 
+            ? prev.filter(y => y !== year)
+            : [...prev, year]
+    );
+  };
   
   const detailColumns: DataTableColumn<NonConformanceData>[] = [
     { accessorKey: 'Id', header: 'ID', cell: (row) => row.Id },
@@ -191,7 +204,9 @@ export default function NonConformanceDashboard() {
        <Card>
         <CardHeader>
           <CardTitle>Risk & Total Volume Overview</CardTitle>
-          <CardDescription>Low risk, high risk, and total non-conformances per quarter.</CardDescription>
+          <CardDescription>
+            Low risk, high risk, and total non-conformances per quarter for: {selectedYears.sort().join(', ')}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={350}>
@@ -285,25 +300,36 @@ export default function NonConformanceDashboard() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4 flex-wrap">
-        <RadioGroup value={yearFilter} onValueChange={(value) => setYearFilter(value as any)} className="flex items-center gap-4">
-            <Label>Year:</Label>
-             <div className="flex items-center space-x-2">
-                <RadioGroupItem value="current-previous" id="year-current-previous" />
-                <Label htmlFor="year-current-previous">Current & Previous Year</Label>
-            </div>
-             <div className="flex items-center space-x-2">
-                <RadioGroupItem value="all" id="year-all" />
-                <Label htmlFor="year-all">All Time</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-                <RadioGroupItem value="current" id="year-current" />
-                <Label htmlFor="year-current">Current Year</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-                <RadioGroupItem value="previous" id="year-previous" />
-                <Label htmlFor="year-previous">Previous Year</Label>
-            </div>
-        </RadioGroup>
+        <div className="flex items-center gap-2">
+            <Label>Years:</Label>
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-[200px] justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {selectedYears.length > 0 
+                            ? `${selectedYears.length} year${selectedYears.length !== 1 ? 's' : ''} selected` 
+                            : "Select years"}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-2" align="start">
+                    <div className="space-y-2">
+                        <h4 className="font-medium leading-none text-sm mb-2 text-muted-foreground px-2">Select years to compare</h4>
+                        <div className="grid gap-2">
+                            {availableYears.map(year => (
+                                <div key={year} className="flex items-center space-x-2 px-2 py-1 rounded hover:bg-muted/50">
+                                    <Checkbox 
+                                        id={`year-${year}`} 
+                                        checked={selectedYears.includes(year)}
+                                        onCheckedChange={() => toggleYear(year)}
+                                    />
+                                    <Label htmlFor={`year-${year}`} className="flex-1 cursor-pointer">{year}</Label>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </PopoverContent>
+            </Popover>
+        </div>
         
         <RadioGroup value={teamFilter} onValueChange={(value) => setTeamFilter(value as any)} className="flex items-center gap-4 ml-auto">
             <Label>Team:</Label>
