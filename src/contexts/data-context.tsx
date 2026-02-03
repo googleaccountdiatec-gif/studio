@@ -9,6 +9,7 @@ interface ChangeActionData { [key: string]: any; }
 interface NonConformanceData { [key: string]: any; }
 interface TrainingData { [key: string]: any; }
 interface BatchReleaseData { [key: string]: any; }
+interface DocumentKpiData { [key: string]: any; }
 
 interface DataContextType {
   capaData: CapaData[];
@@ -16,11 +17,13 @@ interface DataContextType {
   nonConformanceData: NonConformanceData[];
   trainingData: TrainingData[];
   batchReleaseData: BatchReleaseData[];
+  documentKpiData: DocumentKpiData[];
   setCapaData: React.Dispatch<React.SetStateAction<CapaData[]>>;
   setChangeActionData: React.Dispatch<React.SetStateAction<ChangeActionData[]>>;
   setNonConformanceData: React.Dispatch<React.SetStateAction<NonConformanceData[]>>;
   setTrainingData: React.Dispatch<React.SetStateAction<TrainingData[]>>;
   setBatchReleaseData: React.Dispatch<React.SetStateAction<BatchReleaseData[]>>;
+  setDocumentKpiData: React.Dispatch<React.SetStateAction<DocumentKpiData[]>>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -31,6 +34,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [nonConformanceData, setNonConformanceData] = useState<NonConformanceData[]>([]);
   const [trainingData, setTrainingData] = useState<TrainingData[]>([]);
   const [batchReleaseData, setBatchReleaseData] = useState<BatchReleaseData[]>([]);
+  const [documentKpiData, setDocumentKpiData] = useState<DocumentKpiData[]>([]);
 
   return (
     <DataContext.Provider value={{
@@ -39,11 +43,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       nonConformanceData,
       trainingData,
       batchReleaseData,
+      documentKpiData,
       setCapaData,
       setChangeActionData,
       setNonConformanceData,
       setTrainingData,
-      setBatchReleaseData
+      setBatchReleaseData,
+      setDocumentKpiData
     }}>
       {children}
     </DataContext.Provider>

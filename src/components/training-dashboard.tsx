@@ -3,11 +3,11 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
-import { parse, isValid, startOfDay, isAfter, format } from 'date-fns';
+import { parse, isValid, startOfDay, isAfter, format, subDays } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
 import { DataTable, DataTableColumn } from './data-table';
 import { Badge } from './ui/badge';
-import { FileUp } from 'lucide-react';
+import { FileUp, ArrowUpIcon, ArrowDownIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip as TooltipUI, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getProductionTeam } from '@/lib/teams';
@@ -122,6 +122,37 @@ export default function TrainingDashboard() {
         data = data.filter(item => productionTeam.includes(item.trainee));
     }
     return data;
+  }, [trainingData, teamFilter, productionTeam]);
+
+  // NEW: Trend Logic
+  const biWeeklyTrend = useMemo(() => {
+      const today = startOfDay(new Date());
+      const twoWeeksAgo = subDays(today, 14);
+
+      let newOverdue = 0;
+      let resolvedOverdue = 0;
+
+      // Use raw parsed data but apply team filter if needed
+      let trendData = trainingData.map((row: any) => parseTrainingData(row));
+      if (teamFilter === 'production') {
+          trendData = trendData.filter(item => productionTeam.includes(item.trainee));
+      }
+
+      trendData.forEach(item => {
+          // +1: Became overdue in last 14 days
+          // Must be currently Overdue or Pending (but we check strictly for "late" date)
+          // Actually, if it is overdue NOW, it is status 'Overdue'.
+          if (item.status === 'Overdue' && item.deadline >= twoWeeksAgo && item.deadline < today) {
+              newOverdue++;
+          }
+
+          // -1: Was overdue 14 days ago, but is now Completed
+          if (item.status === 'Completed' && item.deadline < twoWeeksAgo) {
+              resolvedOverdue++;
+          }
+      });
+
+      return newOverdue - resolvedOverdue;
   }, [trainingData, teamFilter, productionTeam]);
 
   const stats = useMemo(() => {
@@ -257,7 +288,22 @@ export default function TrainingDashboard() {
             <p className={cn("text-5xl font-bold mt-2", stats.overdue > 0 ? "text-destructive" : "text-emerald-500")}>
                 {stats.overdue}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">{stats.overdue > 0 ? "Action Required!" : "All Clear"}</p>
+             <p className="text-xs text-muted-foreground mt-1">{stats.overdue > 0 ? "Action Required!" : "All Clear"}</p>
+             {/* Manually inserted trend since GlassCard is used */}
+             {biWeeklyTrend !== 0 && (
+                <div className="flex items-center text-xs mt-2">
+                    {biWeeklyTrend > 0 ? (
+                        <span className="text-destructive flex items-center font-medium">
+                        <ArrowUpIcon className="mr-1 h-3 w-3" /> +{biWeeklyTrend}
+                        </span>
+                    ) : (
+                        <span className="text-emerald-500 flex items-center font-medium">
+                        <ArrowDownIcon className="mr-1 h-3 w-3" /> {biWeeklyTrend}
+                        </span>
+                    )}
+                    <span className="text-muted-foreground ml-1">since last bi-weekly</span>
+                </div>
+             )}
         </GlassCard>
       </div>
 

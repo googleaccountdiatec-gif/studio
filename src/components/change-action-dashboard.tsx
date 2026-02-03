@@ -3,8 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileUp, AlertTriangle, ListTodo } from 'lucide-react';
-import { format, isAfter, parse, isValid, startOfDay, startOfMonth } from 'date-fns';
+import { FileUp, AlertTriangle, ListTodo, ArrowUpIcon, ArrowDownIcon } from 'lucide-react';
+import { format, isAfter, parse, isValid, startOfDay, startOfMonth, subDays } from 'date-fns';
 import { CapaChart } from './capa-chart';
 import { Skeleton } from './ui/skeleton';
 import { DataTable, DataTableColumn } from './data-table';
@@ -94,6 +94,38 @@ export default function ChangeActionDashboard() {
     return { totalCount, overdueCount };
   }, [processedData]);
 
+  // NEW: Trend Logic
+  const biWeeklyTrend = useMemo(() => {
+    const today = startOfDay(new Date());
+    const twoWeeksAgo = subDays(today, 14);
+
+    let newOverdue = 0;
+    let resolvedOverdue = 0;
+
+    let trendData = allDataWithDates;
+
+    if (teamFilter === 'production') {
+        trendData = trendData.filter(item => productionTeam.includes(item['Responsible']));
+    }
+
+    trendData.forEach(item => {
+        const pending = item['Pending Steps'] ? item['Pending Steps'].trim() : '';
+        const isCompleted = pending === '';
+        
+        // +1: Became overdue in last 14 days
+        if (isValid(item.deadlineDate) && !isCompleted && item.deadlineDate >= twoWeeksAgo && item.deadlineDate < today) {
+            newOverdue++;
+        }
+
+        // -1: Was overdue 14 days ago, but is now Completed
+        if (isValid(item.deadlineDate) && item.deadlineDate < twoWeeksAgo && isCompleted) {
+             resolvedOverdue++;
+        }
+    });
+
+    return newOverdue - resolvedOverdue;
+  }, [allDataWithDates, teamFilter, productionTeam]);
+
   const monthlyRegistrationData = useMemo(() => {
     const monthCounts: { [key: string]: number } = {};
     allDataWithDates.forEach(item => { 
@@ -180,17 +212,32 @@ export default function ChangeActionDashboard() {
                         <span className="text-sm font-medium text-foreground">Overdue Actions</span>
                         <span className="text-xs text-muted-foreground">Action Required</span>
                     </div>
-                    <span className={cn("text-4xl font-bold", kpiValues.overdueCount > 0 ? "text-destructive" : "text-emerald-500")}>
-                        {kpiValues.overdueCount}
-                    </span>
+                    <div className="flex flex-col items-end">
+                        <span className={cn("text-4xl font-bold", kpiValues.overdueCount > 0 ? "text-destructive" : "text-emerald-500")}>
+                            {kpiValues.overdueCount}
+                        </span>
+                        {/* Trend Display added manually here since GlassCard is custom structure */}
+                        {biWeeklyTrend !== 0 && (
+                            <div className="flex items-center text-xs mt-1">
+                                {biWeeklyTrend > 0 ? (
+                                    <span className="text-destructive flex items-center font-medium">
+                                    <ArrowUpIcon className="mr-1 h-3 w-3" /> +{biWeeklyTrend}
+                                    </span>
+                                ) : (
+                                    <span className="text-emerald-500 flex items-center font-medium">
+                                    <ArrowDownIcon className="mr-1 h-3 w-3" /> {biWeeklyTrend}
+                                    </span>
+                                )}
+                                <span className="text-muted-foreground ml-1">since last bi-weekly</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </GlassCard>
 
         {/* Visualizations - Row 1 */}
         <GlassCard className="lg:col-span-2 p-6">
-             {/* BESTIE EDIT: Dropped from 300px to 220px. 
-                 This is sleek, panoramic, and doesn't hoard screen space. */}
              <div className="h-[220px] w-full">
                  <CapaChart data={monthlyRegistrationData} title="Monthly Registrations" dataKey="total" />
             </div>
@@ -200,8 +247,6 @@ export default function ChangeActionDashboard() {
       {/* Visualizations - Row 2 */}
       <div className="grid gap-6 lg:grid-cols-2">
         <GlassCard className="p-6 lg:col-span-2">
-             {/* BESTIE EDIT: Dropped from 350px to 250px. 
-                 Still your "main event", but leaves room for the table below. */}
              <div className="h-[250px] w-full">
                 <CapaChart 
                     data={actionsByChangeIdData} 

@@ -9,6 +9,7 @@ import BatchReleaseDashboard from "@/components/batch-release-dashboard";
 import CompendiumDashboard from "@/components/compendium-dashboard";
 import SettingsPage from "@/components/settings-page";
 import { MultiUploader } from "@/components/multi-uploader";
+import DocumentsInFlowDashboard from "@/components/documents-in-flow-dashboard";
 
 export default function Home() {
   return (
@@ -26,6 +27,7 @@ export default function Home() {
               <TabsTrigger value="batch-release">Batch Release</TabsTrigger>
               <TabsTrigger value="capa">CAPA</TabsTrigger>
               <TabsTrigger value="change-action">Change Action</TabsTrigger>
+              <TabsTrigger value="documents-in-flow">Documents in Flow</TabsTrigger>
               <TabsTrigger value="non-conformance">Non-conformance</TabsTrigger>
               <TabsTrigger value="training">Training</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -42,6 +44,9 @@ export default function Home() {
             </TabsContent>
             <TabsContent value="change-action">
               <ChangeActionDashboard />
+            </TabsContent>
+            <TabsContent value="documents-in-flow">
+              <DocumentsInFlowDashboard />
             </TabsContent>
             <TabsContent value="non-conformance">
                <NonConformanceDashboard />

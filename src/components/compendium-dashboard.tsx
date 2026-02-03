@@ -76,7 +76,7 @@ const isTaskOverdue = (deadlineStr: any, completedDateStr: any, referenceDate: D
 };
 
 export default function CompendiumDashboard() {
-  const { capaData, changeActionData, nonConformanceData, trainingData } = useData();
+  const { capaData, changeActionData, nonConformanceData, trainingData, documentKpiData } = useData();
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const productionTeam = getProductionTeam();
 
@@ -236,6 +236,28 @@ export default function CompendiumDashboard() {
     ];
   }, [capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // --- Documents in Flow Summary ---
+  const documentsInFlowSummary = useMemo(() => {
+    const documentsInFlow = documentKpiData.filter(doc => doc['Pending Steps'] && doc['Pending Steps'].trim() !== '');
+    
+    let majorRevisions = 0;
+    let otherFlows = 0;
+
+    documentsInFlow.forEach(doc => {
+      if (doc['Document Flow']?.toLowerCase().includes('major')) {
+        majorRevisions++;
+      } else {
+        otherFlows++;
+      }
+    });
+
+    return {
+      total: documentsInFlow.length,
+      majorRevisions,
+      otherFlows,
+    };
+  }, [documentKpiData]);
+
 
   return (
     <div className="space-y-6">
@@ -325,6 +347,24 @@ export default function CompendiumDashboard() {
                         </div>
                     </div>
                 ))}
+            </div>
+        </div>
+      </GlassCard>
+
+      <GlassCard className="p-6">
+        <h3 className="text-lg font-semibold mb-4">Documents in Flow Summary</h3>
+        <div className="flex justify-around items-center h-full min-h-[120px]">
+            <div className="text-center">
+                <p className="text-5xl font-bold text-primary">{documentsInFlowSummary.total}</p>
+                <p className="text-sm text-muted-foreground mt-1">Total Documents In Flow</p>
+            </div>
+            <div className="text-center">
+                <p className="text-3xl font-bold">{documentsInFlowSummary.majorRevisions}</p>
+                <p className="text-sm text-muted-foreground mt-1">Major Revisions</p>
+            </div>
+            <div className="text-center">
+                <p className="text-3xl font-bold">{documentsInFlowSummary.otherFlows}</p>
+                <p className="text-sm text-muted-foreground mt-1">Other Flows</p>
             </div>
         </div>
       </GlassCard>

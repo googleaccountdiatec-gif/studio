@@ -8,7 +8,7 @@ import { Calendar as CalendarIcon, FileUp, Users, AlertTriangle, CheckCircle, Li
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format, isAfter, parse, isValid, startOfDay } from 'date-fns';
+import { format, isAfter, parse, isValid, startOfDay, subDays } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import type { CapaData } from '@/lib/types';
 import { KpiCard } from './kpi-card';
@@ -167,6 +167,66 @@ export default function CapaDashboard() {
     const onTimePercentage = totalCount > 0 ? ((totalCount - overdueCount) / totalCount * 100).toFixed(1) : '0.0';
     return { overdueCount, totalCount, onTimePercentage };
   }, [filteredData]);
+
+  // NEW: Logic for "Change since last bi-weekly"
+  const biWeeklyTrend = useMemo(() => {
+    const today = startOfDay(new Date());
+    const twoWeeksAgo = subDays(today, 14);
+
+    let newOverdue = 0; // The +1s
+    let resolvedOverdue = 0; // The -1s
+
+    // We use the full dataset (respecting team filter) to catch items that might have been completed
+    // and thus filtered out of the main view if 'Show Completed' is off, but we still need them for the calculation.
+    let trendData = capaData; 
+    
+    if (teamFilter === 'production') {
+        trendData = trendData.filter(item => productionTeam.includes(item['Assigned To']));
+    }
+
+    trendData.forEach(item => {
+        const pending = item['Pending Steps'] ? item['Pending Steps'].trim().toLowerCase() : '';
+        const isCompleted = pending === '';
+        const isEffPhase = pending.includes('effectiveness');
+        const isExecPhase = !isCompleted && !isEffPhase;
+
+        const execDate = parseDate(item['Due Date']);
+        const effDate = parseDate(item['Deadline for effectiveness check']);
+
+        // --- EXECUTION PHASE LOGIC ---
+        if (isValid(execDate)) {
+            // +1: Became overdue in Exec in the last 14 days
+            // Must still be in Exec phase to count as "Overdue in Exec"
+            if (isExecPhase && execDate >= twoWeeksAgo && execDate < today) {
+                newOverdue++;
+            }
+
+            // -1: Was overdue in Exec 14 days ago, but is now moved to Eff or Completed
+            if (execDate < twoWeeksAgo) {
+                 if (isEffPhase || isCompleted) {
+                    resolvedOverdue++;
+                 }
+            }
+        }
+
+        // --- EFFECTIVENESS PHASE LOGIC ---
+        if (isValid(effDate)) {
+            // +1: Became overdue in Eff in the last 14 days
+            if (isEffPhase && effDate >= twoWeeksAgo && effDate < today) {
+                newOverdue++;
+            }
+
+            // -1: Was overdue in Eff 14 days ago, but is now Completed
+            if (effDate < twoWeeksAgo) {
+                if (isCompleted) {
+                    resolvedOverdue++;
+                }
+            }
+        }
+    });
+
+    return newOverdue - resolvedOverdue;
+  }, [capaData, teamFilter, productionTeam]);
   
   const chartDataByStatus = useMemo(() => {
     const overdue = kpiValues.overdueCount;
@@ -234,7 +294,14 @@ export default function CapaDashboard() {
     <>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <KpiCard title="Total CAPAs" value={kpiValues.totalCount} icon={ListTodo} description={dateRange?.from ? "In selected date range" : "From imported file"}/>
-            <KpiCard title="Overdue CAPAs" value={kpiValues.overdueCount} icon={AlertTriangle} description={`${(kpiValues.totalCount > 0 ? (kpiValues.overdueCount / kpiValues.totalCount * 100).toFixed(1) : 0)}% of total`}/>
+            <KpiCard 
+                title="Overdue CAPAs" 
+                value={kpiValues.overdueCount} 
+                icon={AlertTriangle} 
+                description={`${(kpiValues.totalCount > 0 ? (kpiValues.overdueCount / kpiValues.totalCount * 100).toFixed(1) : 0)}% of total`}
+                trend={biWeeklyTrend}
+                trendLabel="since last bi-weekly"
+            />
             <KpiCard title="On Time Rate" value={`${kpiValues.onTimePercentage}%`} icon={CheckCircle} description="CAPAs completed on schedule" />
             <KpiCard title="Unique Assignees" value={Object.keys(chartDataByAssignee.reduce((acc, item) => { if(item.name) acc[item.name] = true; return acc; }, {} as Record<string, boolean>)).length} icon={Users} description="People with assigned CAPAs"/>
         </div>
