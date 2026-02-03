@@ -241,20 +241,25 @@ export default function CompendiumDashboard() {
     const documentsInFlow = documentKpiData.filter(doc => doc['Pending Steps'] && doc['Pending Steps'].trim() !== '');
     
     let majorRevisions = 0;
-    let otherFlows = 0;
+    let minorRevisions = 0;
+    let newDocuments = 0;
 
     documentsInFlow.forEach(doc => {
-      if (doc['Document Flow']?.toLowerCase().includes('major')) {
+      const flow = (doc['Document Flow'] || '').toLowerCase();
+      if (flow.includes('major')) {
         majorRevisions++;
-      } else {
-        otherFlows++;
+      } else if (flow.includes('minor')) {
+        minorRevisions++;
+      } else if (flow.includes('create') || flow.includes('new')) {
+        newDocuments++;
       }
     });
 
     return {
       total: documentsInFlow.length,
       majorRevisions,
-      otherFlows,
+      minorRevisions,
+      newDocuments
     };
   }, [documentKpiData]);
 
@@ -353,18 +358,22 @@ export default function CompendiumDashboard() {
 
       <GlassCard className="p-6">
         <h3 className="text-lg font-semibold mb-4">Documents in Flow Summary</h3>
-        <div className="flex justify-around items-center h-full min-h-[120px]">
-            <div className="text-center">
-                <p className="text-5xl font-bold text-primary">{documentsInFlowSummary.total}</p>
-                <p className="text-sm text-muted-foreground mt-1">Total Documents In Flow</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center items-center py-4">
+             <div>
+                <p className="text-4xl font-bold text-primary">{documentsInFlowSummary.total}</p>
+                <p className="text-sm text-muted-foreground mt-1">Total In Flow</p>
             </div>
-            <div className="text-center">
+            <div>
                 <p className="text-3xl font-bold">{documentsInFlowSummary.majorRevisions}</p>
                 <p className="text-sm text-muted-foreground mt-1">Major Revisions</p>
             </div>
-            <div className="text-center">
-                <p className="text-3xl font-bold">{documentsInFlowSummary.otherFlows}</p>
-                <p className="text-sm text-muted-foreground mt-1">Other Flows</p>
+            <div>
+                <p className="text-3xl font-bold">{documentsInFlowSummary.minorRevisions}</p>
+                <p className="text-sm text-muted-foreground mt-1">Minor Revisions</p>
+            </div>
+            <div>
+                <p className="text-3xl font-bold">{documentsInFlowSummary.newDocuments}</p>
+                <p className="text-sm text-muted-foreground mt-1">New Documents</p>
             </div>
         </div>
       </GlassCard>

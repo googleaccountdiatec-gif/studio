@@ -26,12 +26,27 @@ export default function DocumentsInFlowDashboard() {
   }, [documentKpiData]);
 
   const revisionTypeData = useMemo(() => {
-    const counts: { [key: string]: number } = {};
+    const counts: { [key: string]: number } = {
+        "Major Revision": 0,
+        "Minor Revision": 0,
+        "New Document": 0,
+        "Other": 0,
+    };
     documentsInFlow.forEach(doc => {
-      const flow = doc['Document Flow'] || 'Unknown';
-      counts[flow] = (counts[flow] || 0) + 1;
+      const flow = (doc['Document Flow'] || 'Other').toLowerCase();
+      if (flow.includes('major')) {
+        counts["Major Revision"]++;
+      } else if (flow.includes('minor')) {
+        counts["Minor Revision"]++;
+      } else if (flow.includes('create') || flow.includes('new')) {
+        counts["New Document"]++;
+      } else {
+        counts["Other"]++;
+      }
     });
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
+    return Object.entries(counts)
+      .filter(([, value]) => value > 0) // Don't show categories with 0 documents
+      .map(([name, value]) => ({ name, value }));
   }, [documentsInFlow]);
 
   const statusData = useMemo(() => {
