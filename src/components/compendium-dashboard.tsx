@@ -1,14 +1,17 @@
 "use client";
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
-import { parse, isValid, startOfDay, isAfter, getQuarter, subWeeks, isBefore, endOfDay } from 'date-fns';
+import { parse, isValid, startOfDay, isAfter, getQuarter, subWeeks, isBefore, endOfDay, format, differenceInDays } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts';
 import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
-import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { ArrowUp, ArrowDown, Minus, Save, History } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 // --- Helper Functions ---
 
@@ -41,43 +44,27 @@ const parseDate = (dateString: any): Date => {
 
 /**
  * Determines if an item was overdue relative to a specific reference date.
- * * @param deadlineStr - The deadline string from the data.
- * @param completedDateStr - The completion date string from the data.
- * @param referenceDate - The date we are checking against (e.g., Today or 2 Weeks Ago).
- * @returns true if the task was Open AND Past Deadline at the reference moment.
  */
 const isTaskOverdue = (deadlineStr: any, completedDateStr: any, referenceDate: Date): boolean => {
     const deadline = parseDate(deadlineStr);
-    
-    // If no valid deadline exists, it cannot be calculated as overdue
     if (!isValid(deadline)) return false;
-
-    // 1. Check if the deadline had passed by the reference date
-    // We strictly check if Deadline < ReferenceDate. 
-    // (e.g. if Deadline is Today and Reference is Today, it is usually NOT overdue yet, depending on precision. 
-    // We assume deadline is end of day, so strict comparison is safer).
     if (!isBefore(deadline, referenceDate)) return false;
 
-    // 2. Check if it was completed *before* the reference date
     const completedAt = parseDate(completedDateStr);
-    
     if (isValid(completedAt)) {
-        // If it was completed, and the completion happened BEFORE or ON the reference date,
-        // then it was NOT overdue at that time (it was already done).
         if (isBefore(completedAt, referenceDate) || completedAt.getTime() === referenceDate.getTime()) {
             return false;
         }
     }
-
-    // If we are here:
-    // a) Reference date is strictly AFTER the deadline
-    // b) It wasn't completed yet (or completion date is in the future relative to ref date)
     return true;
 };
 
 export default function CompendiumDashboard() {
-  const { capaData, changeActionData, nonConformanceData, trainingData, documentKpiData } = useData();
+  const { capaData, changeActionData, nonConformanceData, trainingData, documentKpiData, snapshots, saveSnapshot } = useData();
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('auto-2-weeks');
+  const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
   const productionTeam = getProductionTeam();
 
   // --- Non-Conformance Chart Logic ---
@@ -137,16 +124,11 @@ export default function CompendiumDashboard() {
     // CAPA
     capaData.forEach(item => {
        if (teamFilter === 'production' && !productionTeam.includes(item['Assigned To'])) return;
-       
        const pendingSteps = item['Pending Steps']?.trim() || "";
        const isEffectiveness = pendingSteps.toLowerCase().includes('effectiveness');
-       
-       // Use "Deadline for effectiveness check" if present, otherwise "Due Date"
-       // This handles completed items correctly by checking the relevant deadline field.
        const deadlineStr = item['Deadline for effectiveness check'] || item['Due Date'];
 
        if (isTaskOverdue(deadlineStr, item['Completed On'], referenceDate)) {
-           // We classify based on current pending step or default to Exec if unknown
            if (isEffectiveness) capaEffectiveness++;
            else capaExecution++;
        }
@@ -155,7 +137,6 @@ export default function CompendiumDashboard() {
     // Change Actions
     changeActionData.forEach(item => {
         if (teamFilter === 'production' && !productionTeam.includes(item['Responsible'])) return;
-        
         if (isTaskOverdue(item['Deadline'], item['Completed On'], referenceDate)) {
             changeActions++;
         }
@@ -164,77 +145,100 @@ export default function CompendiumDashboard() {
     // Training
     trainingData.forEach(item => {
         if (teamFilter === 'production' && !productionTeam.includes(item['Trainee'])) return;
-        
         if (isTaskOverdue(item['Deadline for completing training'], item['Completed On'], referenceDate)) {
             training++;
         }
     });
 
     // Non-Conformance
-    // NC Data often lacks a specific "Due Date" column. We rely on Status for current snapshot.
-    // We cannot accurately calculate historical overdue for NC without a deadline date.
     nonConformanceData.forEach(item => {
         if (teamFilter === 'production') {
             const worker = item["Case Worker"];
             const registeredBy = item["Registered By"];
-            if (!productionTeam.includes(worker) && !productionTeam.includes(registeredBy)) {
-                return;
-            }
+            if (!productionTeam.includes(worker) && !productionTeam.includes(registeredBy)) return;
         }
 
-        // Check if we are calculating "Current" (approx today)
         const isCurrentSnapshot = Math.abs(referenceDate.getTime() - new Date().getTime()) < 86400000;
-
         if (isCurrentSnapshot) {
-            // For current status, we trust the system status
-            if (item['Status'] === 'Deadline Exceeded') {
-                nonConformance++;
-            }
-        } else {
-            // For historical, without a Deadline column, we return 0 (or N/A) to avoid "wildly wrong" data.
-            // If the data is updated with a 'Due Date' column later, we can use:
-            // if (isTaskOverdue(item['Due Date'], item['Completed On'], referenceDate)) nonConformance++;
+            if (item['Status'] === 'Deadline Exceeded') nonConformance++;
         }
     });
 
     return { nonConformance, capaExecution, capaEffectiveness, changeActions, training };
   };
 
-  // --- Overdue Data (Current) ---
+  // --- Current Snapshot Metrics ---
+  const currentMetrics = useMemo(() => getOverdueSnapshot(new Date()), [capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]);
+
+  // --- Overdue Data (Current) for Chart ---
   const overdueData = useMemo(() => {
-    const today = new Date();
-    const counts = getOverdueSnapshot(today);
-
     return [
-        { name: 'Non-Conformance', count: counts.nonConformance, fill: 'hsl(var(--chart-2))' },
-        { name: 'CAPA (Exec)', count: counts.capaExecution, fill: 'hsl(var(--chart-1))' },
-        { name: 'CAPA (Eff)', count: counts.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
-        { name: 'Change Actions', count: counts.changeActions, fill: 'hsl(var(--primary))' },
-        { name: 'Training', count: counts.training, fill: 'hsl(var(--chart-4))' },
+        { name: 'Non-Conformance', count: currentMetrics.nonConformance, fill: 'hsl(var(--chart-2))' },
+        { name: 'CAPA (Exec)', count: currentMetrics.capaExecution, fill: 'hsl(var(--chart-1))' },
+        { name: 'CAPA (Eff)', count: currentMetrics.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
+        { name: 'Change Actions', count: currentMetrics.changeActions, fill: 'hsl(var(--primary))' },
+        { name: 'Training', count: currentMetrics.training, fill: 'hsl(var(--chart-4))' },
     ];
-  }, [capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentMetrics]);
 
-  // --- Bi-Weekly Changes ---
-  const biWeeklyChanges = useMemo(() => {
-    const today = new Date();
-    const twoWeeksAgo = subWeeks(today, 2);
-    
-    const currentCounts = getOverdueSnapshot(today);
-    const pastCounts = getOverdueSnapshot(twoWeeksAgo);
+  // --- Bi-Weekly Changes Logic ---
+  const { comparisonData, comparisonLabel } = useMemo(() => {
+    let pastCounts: any;
+    let label = "since last bi-weekly";
+    let comparisonDate: Date;
 
-    return [
-        { 
-            label: 'Non-Conformance', 
-            // Since we can't reliably calc history for NC, we show 0 change or handle strictly
-            delta: currentCounts.nonConformance > 0 && pastCounts.nonConformance === 0 ? 0 : currentCounts.nonConformance - pastCounts.nonConformance, 
-            fill: 'hsl(var(--chart-2))' 
-        },
-        { label: 'CAPA (Exec)', delta: currentCounts.capaExecution - pastCounts.capaExecution, fill: 'hsl(var(--chart-1))' },
-        { label: 'CAPA (Eff)', delta: currentCounts.capaEffectiveness - pastCounts.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
-        { label: 'Change Actions', delta: currentCounts.changeActions - pastCounts.changeActions, fill: 'hsl(var(--primary))' },
-        { label: 'Training', delta: currentCounts.training - pastCounts.training, fill: 'hsl(var(--chart-4))' },
+    if (selectedSnapshotId === 'auto-2-weeks') {
+        comparisonDate = subWeeks(new Date(), 2);
+        pastCounts = getOverdueSnapshot(comparisonDate);
+    } else if (selectedSnapshotId === 'auto-1-week') {
+        comparisonDate = subWeeks(new Date(), 1);
+        pastCounts = getOverdueSnapshot(comparisonDate);
+        label = "since last week";
+    } else {
+        const snap = snapshots.find(s => s.id === selectedSnapshotId);
+        if (snap) {
+            pastCounts = snap.metrics;
+            comparisonDate = snap.timestamp?.toDate ? snap.timestamp.toDate() : new Date(snap.timestamp);
+            const daysDiff = differenceInDays(new Date(), comparisonDate);
+            
+            if (daysDiff === 7) label = "since last week";
+            else if (daysDiff === 14) label = "since last bi-weekly";
+            else label = `since ${format(comparisonDate, 'dd.MM.yyyy')}`;
+        } else {
+            comparisonDate = subWeeks(new Date(), 2);
+            pastCounts = getOverdueSnapshot(comparisonDate);
+        }
+    }
+
+    const deltas = [
+        { label: 'Non-Conformance', delta: currentMetrics.nonConformance - pastCounts.nonConformance, fill: 'hsl(var(--chart-2))' },
+        { label: 'CAPA (Exec)', delta: currentMetrics.capaExecution - pastCounts.capaExecution, fill: 'hsl(var(--chart-1))' },
+        { label: 'CAPA (Eff)', delta: currentMetrics.capaEffectiveness - pastCounts.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
+        { label: 'Change Actions', delta: currentMetrics.changeActions - pastCounts.changeActions, fill: 'hsl(var(--primary))' },
+        { label: 'Training', delta: currentMetrics.training - pastCounts.training, fill: 'hsl(var(--chart-4))' },
     ];
-  }, [capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    return { comparisonData: deltas, comparisonLabel: label };
+  }, [selectedSnapshotId, snapshots, currentMetrics, capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]);
+
+  const handleSaveSnapshot = async () => {
+    setIsSaving(true);
+    try {
+        await saveSnapshot(currentMetrics);
+        toast({
+            title: "Snapshot Saved",
+            description: "Current metrics have been saved to the database.",
+        });
+    } catch (error) {
+        toast({
+            title: "Error",
+            description: "Failed to save snapshot.",
+            variant: "destructive",
+        });
+    } finally {
+        setIsSaving(false);
+    }
+  };
 
     // --- Documents in Flow Summary ---
   const documentsInFlowSummary = useMemo(() => {
@@ -304,16 +308,28 @@ export default function CompendiumDashboard() {
       <GlassCard className="p-6">
         <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold">Total Overdue Overview</h3>
-             <RadioGroup value={teamFilter} onValueChange={(value) => setTeamFilter(value as any)} className="flex items-center gap-4">
-                <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="all" id="t1-comp" />
-                    <Label htmlFor="t1-comp" className="text-sm">All Operators</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="production" id="t2-comp" />
-                    <Label htmlFor="t2-comp" className="text-sm">Production Only</Label>
-                </div>
-            </RadioGroup>
+            <div className="flex items-center gap-4">
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleSaveSnapshot} 
+                    disabled={isSaving}
+                    className="h-8 gap-2"
+                >
+                    <Save className="w-4 h-4" />
+                    {isSaving ? "Saving..." : "Save Snapshot"}
+                </Button>
+                <RadioGroup value={teamFilter} onValueChange={(value) => setTeamFilter(value as any)} className="flex items-center gap-4">
+                    <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="all" id="t1-comp" />
+                        <Label htmlFor="t1-comp" className="text-sm font-normal">All Operators</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="production" id="t2-comp" />
+                        <Label htmlFor="t2-comp" className="text-sm font-normal">Production Only</Label>
+                    </div>
+                </RadioGroup>
+            </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -337,8 +353,29 @@ export default function CompendiumDashboard() {
 
             {/* Change List Area */}
             <div className="flex flex-col justify-center space-y-4 border-l pl-8 border-border/50">
-                <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2">Change Since Last Bi-Weekly</h4>
-                {biWeeklyChanges.map((item) => (
+                <div className="flex flex-col gap-1 mb-2">
+                    <div className="flex items-center justify-between">
+                        <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Change</h4>
+                        <Select value={selectedSnapshotId} onValueChange={setSelectedSnapshotId}>
+                            <SelectTrigger className="h-6 w-[120px] text-[10px] bg-transparent border-none shadow-none focus:ring-0 px-0 justify-end gap-1">
+                                <History className="w-3 h-3" />
+                                <SelectValue placeholder="Select period" />
+                            </SelectTrigger>
+                            <SelectContent align="end" className="text-xs">
+                                <SelectItem value="auto-1-week">Last 7 Days (Auto)</SelectItem>
+                                <SelectItem value="auto-2-weeks">Last 14 Days (Auto)</SelectItem>
+                                {snapshots.map((snap) => (
+                                    <SelectItem key={snap.id} value={snap.id!}>
+                                        {snap.timestamp?.toDate ? format(snap.timestamp.toDate(), 'dd.MM.yy HH:mm') : 'Saved Data'}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <p className="text-sm font-semibold capitalize">{comparisonLabel}</p>
+                </div>
+
+                {comparisonData.map((item) => (
                     <div key={item.label} className="flex items-center justify-between">
                         <span className="text-sm font-medium">{item.label}</span>
                         <div 
