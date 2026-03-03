@@ -20,6 +20,13 @@ export interface DocumentKpiData {
   'Completed On': string;
 }
 
+export interface DocumentsInFlowMetrics {
+  total: number;
+  majorRevisions: number;
+  minorRevisions: number;
+  newDocuments: number;
+}
+
 export interface MetricSnapshot {
   id?: string;
   timestamp: any; // Firestore Timestamp or Date
@@ -29,5 +36,6 @@ export interface MetricSnapshot {
     capaEffectiveness: number;
     changeActions: number;
     training: number;
+    documentsInFlow?: DocumentsInFlowMetrics;
   };
 }

@@ -9,6 +9,7 @@ import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
 import { ArrowUp, ArrowDown, Minus, Save, History } from 'lucide-react';
+import type { DocumentsInFlowMetrics } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -167,8 +168,28 @@ export default function CompendiumDashboard() {
     return { nonConformance, capaExecution, capaEffectiveness, changeActions, training };
   };
 
+  // --- Documents in Flow Metrics ---
+  const getDocumentsInFlowMetrics = (): DocumentsInFlowMetrics => {
+    const documentsInFlow = documentKpiData.filter(doc => doc['Pending Steps'] && doc['Pending Steps'].trim() !== '');
+    let majorRevisions = 0;
+    let minorRevisions = 0;
+    let newDocuments = 0;
+
+    documentsInFlow.forEach(doc => {
+      const flow = (doc['Document Flow'] || '').toLowerCase();
+      if (flow.includes('major')) majorRevisions++;
+      else if (flow.includes('minor')) minorRevisions++;
+      else if (flow.includes('create') || flow.includes('new')) newDocuments++;
+    });
+
+    return { total: documentsInFlow.length, majorRevisions, minorRevisions, newDocuments };
+  };
+
   // --- Current Snapshot Metrics ---
-  const currentMetrics = useMemo(() => getOverdueSnapshot(new Date()), [capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]);
+  const currentMetrics = useMemo(() => ({
+    ...getOverdueSnapshot(new Date()),
+    documentsInFlow: getDocumentsInFlowMetrics(),
+  }), [capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam]);
 
   // --- Overdue Data (Current) for Chart ---
   const overdueData = useMemo(() => {
@@ -182,10 +203,11 @@ export default function CompendiumDashboard() {
   }, [currentMetrics]);
 
   // --- Bi-Weekly Changes Logic ---
-  const { comparisonData, comparisonLabel } = useMemo(() => {
+  const { comparisonData, comparisonLabel, docFlowDeltas } = useMemo(() => {
     let pastCounts: any;
     let label = "since last bi-weekly";
     let comparisonDate: Date;
+    let pastDocFlow: DocumentsInFlowMetrics | undefined;
 
     if (selectedSnapshotId === 'auto-2-weeks') {
         comparisonDate = subWeeks(new Date(), 2);
@@ -198,9 +220,10 @@ export default function CompendiumDashboard() {
         const snap = snapshots.find(s => s.id === selectedSnapshotId);
         if (snap) {
             pastCounts = snap.metrics;
+            pastDocFlow = snap.metrics.documentsInFlow;
             comparisonDate = snap.timestamp?.toDate ? snap.timestamp.toDate() : new Date(snap.timestamp);
             const daysDiff = differenceInDays(new Date(), comparisonDate);
-            
+
             if (daysDiff === 7) label = "since last week";
             else if (daysDiff === 14) label = "since last bi-weekly";
             else label = `since ${format(comparisonDate, 'dd.MM.yyyy')}`;
@@ -218,8 +241,16 @@ export default function CompendiumDashboard() {
         { label: 'Training', delta: currentMetrics.training - pastCounts.training, fill: 'hsl(var(--chart-4))' },
     ];
 
-    return { comparisonData: deltas, comparisonLabel: label };
-  }, [selectedSnapshotId, snapshots, currentMetrics, capaData, changeActionData, trainingData, nonConformanceData, teamFilter, productionTeam]);
+    // Documents in Flow deltas (only available from saved snapshots)
+    const docDeltas = pastDocFlow ? {
+        total: currentMetrics.documentsInFlow.total - pastDocFlow.total,
+        majorRevisions: currentMetrics.documentsInFlow.majorRevisions - pastDocFlow.majorRevisions,
+        minorRevisions: currentMetrics.documentsInFlow.minorRevisions - pastDocFlow.minorRevisions,
+        newDocuments: currentMetrics.documentsInFlow.newDocuments - pastDocFlow.newDocuments,
+    } : null;
+
+    return { comparisonData: deltas, comparisonLabel: label, docFlowDeltas: docDeltas };
+  }, [selectedSnapshotId, snapshots, currentMetrics, capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam]);
 
   const handleSaveSnapshot = async () => {
     setIsSaving(true);
@@ -240,32 +271,7 @@ export default function CompendiumDashboard() {
     }
   };
 
-    // --- Documents in Flow Summary ---
-  const documentsInFlowSummary = useMemo(() => {
-    const documentsInFlow = documentKpiData.filter(doc => doc['Pending Steps'] && doc['Pending Steps'].trim() !== '');
-    
-    let majorRevisions = 0;
-    let minorRevisions = 0;
-    let newDocuments = 0;
-
-    documentsInFlow.forEach(doc => {
-      const flow = (doc['Document Flow'] || '').toLowerCase();
-      if (flow.includes('major')) {
-        majorRevisions++;
-      } else if (flow.includes('minor')) {
-        minorRevisions++;
-      } else if (flow.includes('create') || flow.includes('new')) {
-        newDocuments++;
-      }
-    });
-
-    return {
-      total: documentsInFlow.length,
-      majorRevisions,
-      minorRevisions,
-      newDocuments
-    };
-  }, [documentKpiData]);
+  const documentsInFlowSummary = currentMetrics.documentsInFlow;
 
 
   return (
@@ -399,18 +405,54 @@ export default function CompendiumDashboard() {
              <div>
                 <p className="text-4xl font-bold text-primary">{documentsInFlowSummary.total}</p>
                 <p className="text-sm text-muted-foreground mt-1">Total In Flow</p>
+                {docFlowDeltas && (
+                  <div className="flex items-center justify-center gap-1 mt-2 text-xs font-semibold text-muted-foreground">
+                    <span>Change:</span>
+                    {docFlowDeltas.total > 0 && <ArrowUp className="w-3 h-3 text-destructive" />}
+                    {docFlowDeltas.total < 0 && <ArrowDown className="w-3 h-3 text-green-500" />}
+                    {docFlowDeltas.total === 0 && <Minus className="w-3 h-3" />}
+                    <span className={docFlowDeltas.total > 0 ? 'text-destructive' : docFlowDeltas.total < 0 ? 'text-green-500' : ''}>{Math.abs(docFlowDeltas.total)}</span>
+                  </div>
+                )}
             </div>
             <div>
                 <p className="text-3xl font-bold">{documentsInFlowSummary.majorRevisions}</p>
                 <p className="text-sm text-muted-foreground mt-1">Major Revisions</p>
+                {docFlowDeltas && (
+                  <div className="flex items-center justify-center gap-1 mt-2 text-xs font-semibold text-muted-foreground">
+                    <span>Change:</span>
+                    {docFlowDeltas.majorRevisions > 0 && <ArrowUp className="w-3 h-3 text-destructive" />}
+                    {docFlowDeltas.majorRevisions < 0 && <ArrowDown className="w-3 h-3 text-green-500" />}
+                    {docFlowDeltas.majorRevisions === 0 && <Minus className="w-3 h-3" />}
+                    <span className={docFlowDeltas.majorRevisions > 0 ? 'text-destructive' : docFlowDeltas.majorRevisions < 0 ? 'text-green-500' : ''}>{Math.abs(docFlowDeltas.majorRevisions)}</span>
+                  </div>
+                )}
             </div>
             <div>
                 <p className="text-3xl font-bold">{documentsInFlowSummary.minorRevisions}</p>
                 <p className="text-sm text-muted-foreground mt-1">Minor Revisions</p>
+                {docFlowDeltas && (
+                  <div className="flex items-center justify-center gap-1 mt-2 text-xs font-semibold text-muted-foreground">
+                    <span>Change:</span>
+                    {docFlowDeltas.minorRevisions > 0 && <ArrowUp className="w-3 h-3 text-destructive" />}
+                    {docFlowDeltas.minorRevisions < 0 && <ArrowDown className="w-3 h-3 text-green-500" />}
+                    {docFlowDeltas.minorRevisions === 0 && <Minus className="w-3 h-3" />}
+                    <span className={docFlowDeltas.minorRevisions > 0 ? 'text-destructive' : docFlowDeltas.minorRevisions < 0 ? 'text-green-500' : ''}>{Math.abs(docFlowDeltas.minorRevisions)}</span>
+                  </div>
+                )}
             </div>
             <div>
                 <p className="text-3xl font-bold">{documentsInFlowSummary.newDocuments}</p>
                 <p className="text-sm text-muted-foreground mt-1">New Documents</p>
+                {docFlowDeltas && (
+                  <div className="flex items-center justify-center gap-1 mt-2 text-xs font-semibold text-muted-foreground">
+                    <span>Change:</span>
+                    {docFlowDeltas.newDocuments > 0 && <ArrowUp className="w-3 h-3 text-destructive" />}
+                    {docFlowDeltas.newDocuments < 0 && <ArrowDown className="w-3 h-3 text-green-500" />}
+                    {docFlowDeltas.newDocuments === 0 && <Minus className="w-3 h-3" />}
+                    <span className={docFlowDeltas.newDocuments > 0 ? 'text-destructive' : docFlowDeltas.newDocuments < 0 ? 'text-green-500' : ''}>{Math.abs(docFlowDeltas.newDocuments)}</span>
+                  </div>
+                )}
             </div>
         </div>
       </GlassCard>
