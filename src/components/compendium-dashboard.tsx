@@ -75,6 +75,33 @@ export default function CompendiumDashboard() {
   const { toast } = useToast();
   const productionTeam = getProductionTeam();
 
+  // Auto-select the snapshot closest to 2 weeks ago (by ISO week number)
+  useEffect(() => {
+    if (snapshots.length === 0) return;
+    const targetWeek = getISOWeek(subWeeks(new Date(), 2));
+    const targetYear = subWeeks(new Date(), 2).getFullYear();
+
+    let bestSnap: typeof snapshots[0] | null = null;
+    let bestDiff = Infinity;
+
+    for (const snap of snapshots) {
+      const date = snap.timestamp?.toDate ? snap.timestamp.toDate() : new Date(snap.timestamp);
+      if (!isValid(date)) continue;
+      const snapWeek = getISOWeek(date);
+      const snapYear = date.getFullYear();
+      // Compare by week distance, weighting year difference by 52
+      const diff = Math.abs((snapYear - targetYear) * 52 + (snapWeek - targetWeek));
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestSnap = snap;
+      }
+    }
+
+    if (bestSnap?.id) {
+      setSelectedSnapshotId(bestSnap.id);
+    }
+  }, [snapshots]);
+
   // --- Non-Conformance Chart Logic ---
   const ncChartData = useMemo(() => {
     const currentYear = new Date().getFullYear();
