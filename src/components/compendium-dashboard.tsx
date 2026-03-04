@@ -3,7 +3,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
-import { parse, isValid, startOfDay, isAfter, getQuarter, subWeeks, isBefore, endOfDay, format, differenceInDays } from 'date-fns';
+import { parse, isValid, startOfDay, isAfter, getQuarter, subWeeks, isBefore, endOfDay, format, differenceInDays, getISOWeek } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts';
 import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -46,6 +46,13 @@ const parseDate = (dateString: any): Date => {
 /**
  * Determines if an item was overdue relative to a specific reference date.
  */
+const formatSnapshotLabel = (timestamp: any): string => {
+  const date = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
+  if (!isValid(date)) return 'Saved Data';
+  const week = getISOWeek(date);
+  return `Wk ${week} — ${format(date, 'dd.MM.yy')}`;
+};
+
 const isTaskOverdue = (deadlineStr: any, completedDateStr: any, referenceDate: Date): boolean => {
     const deadline = parseDate(deadlineStr);
     if (!isValid(deadline)) return false;
@@ -226,7 +233,7 @@ export default function CompendiumDashboard() {
 
             if (daysDiff === 7) label = "since last week";
             else if (daysDiff === 14) label = "since last bi-weekly";
-            else label = `since ${format(comparisonDate, 'dd.MM.yyyy')}`;
+            else label = `since Wk ${getISOWeek(comparisonDate)} — ${format(comparisonDate, 'dd.MM.yy')}`;
         } else {
             comparisonDate = subWeeks(new Date(), 2);
             pastCounts = getOverdueSnapshot(comparisonDate);
@@ -363,7 +370,7 @@ export default function CompendiumDashboard() {
                     <div className="flex items-center justify-between">
                         <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Change</h4>
                         <Select value={selectedSnapshotId} onValueChange={setSelectedSnapshotId}>
-                            <SelectTrigger className="h-6 w-[120px] text-[10px] bg-transparent border-none shadow-none focus:ring-0 px-0 justify-end gap-1">
+                            <SelectTrigger className="h-6 w-[150px] text-[10px] bg-transparent border-none shadow-none focus:ring-0 px-0 justify-end gap-1">
                                 <History className="w-3 h-3" />
                                 <SelectValue placeholder="Select period" />
                             </SelectTrigger>
@@ -372,7 +379,7 @@ export default function CompendiumDashboard() {
                                 <SelectItem value="auto-2-weeks">Last 14 Days (Auto)</SelectItem>
                                 {snapshots.map((snap) => (
                                     <SelectItem key={snap.id} value={snap.id!}>
-                                        {snap.timestamp?.toDate ? format(snap.timestamp.toDate(), 'dd.MM.yy HH:mm') : 'Saved Data'}
+                                        {formatSnapshotLabel(snap.timestamp)}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
