@@ -27,5 +27,5 @@ env:
     value: "646504045808"
     availability: [BUILD, RUNTIME]
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: "e476dfb12074287ee73635"
+    value: "1:646504045808:web:e476dfb12074287ee73635"
     availability: [BUILD, RUNTIME]

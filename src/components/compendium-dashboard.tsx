@@ -455,6 +455,9 @@ export default function CompendiumDashboard() {
                 )}
             </div>
         </div>
+        {!docFlowDeltas && (
+          <p className="text-xs text-muted-foreground text-center mt-3">Save a snapshot and select it from the history dropdown to track changes.</p>
+        )}
       </GlassCard>
 
     </div>
