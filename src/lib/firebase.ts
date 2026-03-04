@@ -24,6 +24,6 @@ if (missingVars.length > 0) {
 
 // Initialize Firebase
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const db = getFirestore(app, 'kpichanges');
 
 export { db };

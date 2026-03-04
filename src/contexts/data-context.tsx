@@ -65,11 +65,20 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const saveSnapshot = async (metrics: MetricSnapshot['metrics']) => {
+    const timeoutMs = 15000;
     try {
-      await addDoc(collection(db, 'biweekly_snapshots'), {
+      const savePromise = addDoc(collection(db, 'biweekly_snapshots'), {
         timestamp: serverTimestamp(),
         metrics
       });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(
+          `Firestore addDoc timed out after ${timeoutMs / 1000}s. ` +
+          `Check that your Firestore database exists and is named "(default)". ` +
+          `Project: ${db.app.options.projectId}`
+        )), timeoutMs)
+      );
+      await Promise.race([savePromise, timeoutPromise]);
       await fetchSnapshots();
     } catch (error) {
       console.error("Error saving snapshot:", error);
