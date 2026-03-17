@@ -204,7 +204,13 @@ export default function CompendiumDashboard() {
 
   // --- Documents in Flow Metrics ---
   const getDocumentsInFlowMetrics = (): DocumentsInFlowMetrics => {
-    const documentsInFlow = documentKpiData.filter(doc => doc['Pending Steps'] && doc['Pending Steps'].trim() !== '');
+    const documentsInFlow = documentKpiData.filter(doc => {
+        if (teamFilter === 'production' && !productionTeam.includes(doc['Responsible'])) {
+            return false;
+        }
+        return doc['Pending Steps'] && doc['Pending Steps'].trim() !== '';
+    });
+
     let majorRevisions = 0;
     let minorRevisions = 0;
     let newDocuments = 0;

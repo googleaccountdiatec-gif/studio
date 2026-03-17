@@ -18,6 +18,7 @@ export interface DocumentKpiData {
   'Document Flow': string;
   'Pending Steps': string;
   'Completed On': string;
+  'Responsible': string;
 }
 
 export interface DocumentsInFlowMetrics {
