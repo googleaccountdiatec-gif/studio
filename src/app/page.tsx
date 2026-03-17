@@ -10,13 +10,17 @@ import CompendiumDashboard from "@/components/compendium-dashboard";
 import SettingsPage from "@/components/settings-page";
 import { MultiUploader } from "@/components/multi-uploader";
 import DocumentsInFlowDashboard from "@/components/documents-in-flow-dashboard";
+import Image from 'next/image';
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="flex flex-col min-h-screen">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6">
-          <h1 className="text-xl font-semibold tracking-tight text-primary">KPI Insights</h1>
+          <div className="flex items-center gap-2">
+            <Image src="/logo.png" alt="Company Logo" width={40} height={40} />
+            <h1 className="text-xl font-semibold tracking-tight text-primary">KPI Insights</h1>
+          </div>
           <MultiUploader />
         </header>
 
