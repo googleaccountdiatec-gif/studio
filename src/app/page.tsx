@@ -16,7 +16,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="flex flex-col min-h-screen">
-        <header className="sticky top-0 z-30 flex h-24 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6">
+        <header className="sticky top-0 z-30 flex h-10 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <Image src="/logo.png" alt="Company Logo" width={120} height={120} />
             <h1 className="text-xl font-semibold tracking-tight text-primary">KPI Insights</h1>
