@@ -25,10 +25,13 @@ interface ChangeActionData {
   'Deadline': string;
   'Change Title': string;
   'Change ID (CMID)': string;
+  'Approve'?: string;
   'Registration Time': string;
+  'Completed On'?: string;
   isOverdue: boolean;
   deadlineDate: Date;
   registrationDate: Date;
+  [key: string]: any;
 }
 
 const DATE_FORMATS = [
