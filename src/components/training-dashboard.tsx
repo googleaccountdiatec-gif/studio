@@ -19,8 +19,11 @@ interface TrainingData {
   'Title': string;
   'Trainee': string;
   'Training category': string;
-  'Pending Steps': string;
   'Deadline for completing training': string;
+  'Final training approval'?: string;
+  'Pending Steps': string;
+  'Completed On'?: string;
+  [key: string]: any;
 }
 
 interface ProcessedTrainingRecord {
