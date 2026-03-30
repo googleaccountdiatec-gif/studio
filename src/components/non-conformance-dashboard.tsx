@@ -4,8 +4,8 @@ import React, { useState, useMemo, ChangeEvent } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { FileUp, CalendarIcon } from 'lucide-react';
-import { format, parse, isValid, getQuarter } from 'date-fns';
+import { FileUp, CalendarIcon, CheckCircle2, XCircle } from 'lucide-react';
+import { format, parse, isValid, getQuarter, differenceInDays } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from './ui/skeleton';
 import { DataTable, DataTableColumn } from './data-table';
@@ -19,6 +19,8 @@ import { useData } from '@/contexts/data-context';
 import { getProductionTeam } from '@/lib/teams';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { DrillDownSheet, SummaryBar, InsightPanel, InsightCard, ExpandableDataTable, DetailSection } from '@/components/drill-down';
+import { exportToCsv } from '@/lib/csv-export';
 
 // Updated headers: Removed "Deadline...", Added "Status"
 const EXPECTED_HEADERS = ["Id", "Non Conformance Title", "Classification", "Pending Steps", "Case Worker", "Status", "Registration Time", "Registered By", "Reoccurrence"];
@@ -69,6 +71,207 @@ const parseDate = (dateString: string): Date => {
   return new Date('invalid');
 };
 
+// --- Corrective action boolean helper ---
+const CORRECTIVE_ACTIONS = [
+  { key: 'Segregation of product', label: 'Segregation of product' },
+  { key: 'Discarded product', label: 'Discarded product' },
+  { key: 'Started new production', label: 'Started new production' },
+  { key: 'Repeated operation/analysis', label: 'Repeated operation/analysis' },
+] as const;
+
+function isTruthy(val: string | undefined): boolean {
+  if (!val) return false;
+  const lower = val.trim().toLowerCase();
+  return lower === 'yes' || lower === 'true' || lower === '1';
+}
+
+// --- NcListView component ---
+interface NcListViewProps {
+  data: NonConformanceData[];
+  summary: { total: number; lowRisk: number; highRisk: number; avgDaysToClose: number | null; reoccurrenceRate: number };
+  onSelectNc: (id: string) => void;
+}
+
+function NcListView({ data, summary, onSelectNc }: NcListViewProps) {
+  // Case worker distribution
+  const caseWorkerCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    data.forEach(d => {
+      const worker = d['Case Worker'] || 'Unknown';
+      map[worker] = (map[worker] || 0) + 1;
+    });
+    return Object.entries(map)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [data]);
+
+  // Corrective action counts
+  const correctiveActionCounts = useMemo(() => {
+    return CORRECTIVE_ACTIONS.map(action => ({
+      label: action.label,
+      count: data.filter(d => isTruthy(d[action.key])).length,
+    }));
+  }, [data]);
+
+  const expandableColumns: import('@/components/drill-down').ExpandableColumn<NonConformanceData>[] = [
+    { key: 'Id', header: 'ID', sortable: true },
+    { key: 'Non Conformance Title', header: 'Title', cell: (row) => (
+      <span className="max-w-[200px] truncate block">{row['Non Conformance Title']}</span>
+    )},
+    { key: 'Classification', header: 'Classification', sortable: true, cell: (row) => (
+      <Badge variant={row.Classification === 'High risk' ? 'destructive' : 'secondary'}>
+        {row.Classification}
+      </Badge>
+    )},
+    { key: 'Case Worker', header: 'Case Worker', sortable: true },
+    { key: 'Reoccurrence', header: 'Reoccurrence', cell: (row) => (
+      row.Reoccurrence === 'YES'
+        ? <Badge variant="destructive">YES</Badge>
+        : <Badge variant="outline">{row.Reoccurrence || 'NO'}</Badge>
+    )},
+  ];
+
+  return (
+    <>
+      <SummaryBar metrics={[
+        { label: 'Total NCs', value: summary.total },
+        { label: 'Low Risk', value: summary.lowRisk, color: 'success' },
+        { label: 'High Risk', value: summary.highRisk, color: summary.highRisk > 0 ? 'danger' : 'default' },
+        { label: 'Avg Days to Close', value: summary.avgDaysToClose !== null ? `${summary.avgDaysToClose}d` : 'N/A' },
+      ]} />
+
+      <InsightPanel columns={2}>
+        <InsightCard title="Corrective Actions Taken">
+          <div className="grid grid-cols-2 gap-3">
+            {correctiveActionCounts.map(ca => (
+              <div key={ca.label} className="flex flex-col items-center p-2 rounded-md bg-muted/50">
+                <span className="text-2xl font-bold">{ca.count}</span>
+                <span className="text-xs text-muted-foreground text-center">{ca.label}</span>
+              </div>
+            ))}
+          </div>
+        </InsightCard>
+        <InsightCard title="Case Worker Distribution">
+          <div className="space-y-2 max-h-[180px] overflow-y-auto">
+            {caseWorkerCounts.map(cw => (
+              <div key={cw.name} className="flex items-center justify-between text-sm">
+                <span className="truncate mr-2">{cw.name}</span>
+                <Badge variant="secondary">{cw.count}</Badge>
+              </div>
+            ))}
+          </div>
+        </InsightCard>
+      </InsightPanel>
+
+      <ExpandableDataTable
+        columns={expandableColumns}
+        data={data}
+        getRowId={(row) => row.Id}
+        onRowClick={(row) => onSelectNc(row.Id)}
+        expandedContent={(row) => (
+          <div className="space-y-3">
+            {row['Investigation summary'] && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Investigation Summary</p>
+                <p className="text-sm">
+                  {row['Investigation summary'].length > 200
+                    ? row['Investigation summary'].slice(0, 200) + '...'
+                    : row['Investigation summary']}
+                </p>
+              </div>
+            )}
+            <div className="flex items-center gap-4 flex-wrap">
+              {CORRECTIVE_ACTIONS.map(action => (
+                <div key={action.key} className="flex items-center gap-1.5 text-sm">
+                  {isTruthy(row[action.key])
+                    ? <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    : <XCircle className="w-4 h-4 text-muted-foreground/40" />
+                  }
+                  <span className={isTruthy(row[action.key]) ? '' : 'text-muted-foreground'}>{action.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      />
+    </>
+  );
+}
+
+// --- NcDetailView component ---
+interface NcDetailViewProps {
+  nc: NonConformanceData;
+}
+
+function NcDetailView({ nc }: NcDetailViewProps) {
+  return (
+    <div className="space-y-6">
+      {/* Title and Badges */}
+      <div>
+        <h3 className="text-lg font-semibold mb-2">{nc['Non Conformance Title']}</h3>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant={nc.Classification === 'High risk' ? 'destructive' : 'secondary'}>
+            {nc.Classification}
+          </Badge>
+          {nc.Reoccurrence === 'YES' ? (
+            <Badge variant="destructive">Reoccurrence: YES</Badge>
+          ) : (
+            <Badge variant="outline">Reoccurrence: {nc.Reoccurrence || 'NO'}</Badge>
+          )}
+          <Badge variant={nc.Status === 'Deadline Exceeded' ? 'destructive' : 'secondary'}>
+            {nc.Status}
+          </Badge>
+        </div>
+      </div>
+
+      {/* Metadata Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div>
+          <p className="text-xs text-muted-foreground font-medium">Case Worker</p>
+          <p className="text-sm font-medium mt-0.5">{nc['Case Worker'] || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground font-medium">Registered By</p>
+          <p className="text-sm font-medium mt-0.5">{nc['Registered By'] || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground font-medium">Registration Time</p>
+          <p className="text-sm font-medium mt-0.5">{nc['Registration Time'] || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground font-medium">Completed On</p>
+          <p className="text-sm font-medium mt-0.5">{nc['Completed On'] || 'N/A'}</p>
+        </div>
+      </div>
+
+      {/* Detail Sections */}
+      <div className="space-y-3">
+        <DetailSection title="Classification Justification" content={nc['Classification justification']} />
+        <DetailSection title="Impact Assessment" content={nc['Impact Assessment']} />
+        <DetailSection title="Investigation Summary" content={nc['Investigation summary']} />
+        <DetailSection title="Root Cause Description" content={nc['Root cause description']} />
+        <DetailSection title="Impact Other" content={nc['Impact Other']} defaultOpen={false} />
+      </div>
+
+      {/* Corrective Actions */}
+      <div className="rounded-lg border p-4">
+        <h4 className="text-sm font-medium mb-3">Corrective Actions</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {CORRECTIVE_ACTIONS.map(action => (
+            <div key={action.key} className="flex items-center gap-2 text-sm">
+              {isTruthy(nc[action.key])
+                ? <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                : <XCircle className="w-5 h-5 text-muted-foreground/40 flex-shrink-0" />
+              }
+              <span className={isTruthy(nc[action.key]) ? 'font-medium' : 'text-muted-foreground'}>{action.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function NonConformanceDashboard() {
   const { nonConformanceData } = useData();
   
@@ -78,6 +281,8 @@ export default function NonConformanceDashboard() {
   
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const [dialogData, setDialogData] = useState<{ title: string; data: NonConformanceData[] } | null>(null);
+  const [selectedNcId, setSelectedNcId] = useState<string | null>(null);
+  const [navigationLevel, setNavigationLevel] = useState<'list' | 'detail'>('list');
   const productionTeam = getProductionTeam();
 
   const allDataWithDates = useMemo(() => {
@@ -161,6 +366,37 @@ export default function NonConformanceDashboard() {
     });
   }, [quarterlyData, selectedYears]);
 
+  const drillDownSummary = useMemo(() => {
+    if (!dialogData) return null;
+    const items = dialogData.data;
+    const total = items.length;
+    const lowRisk = items.filter(d => d.Classification === 'Low risk').length;
+    const highRisk = items.filter(d => d.Classification === 'High risk').length;
+    const reoccurrenceCount = items.filter(d => d.Reoccurrence === 'YES').length;
+    const reoccurrenceRate = total > 0 ? Math.round((reoccurrenceCount / total) * 100) : 0;
+
+    const daysToClose: number[] = [];
+    items.forEach(d => {
+      if (d['Completed On'] && d['Registration Time']) {
+        const regDate = parseDate(d['Registration Time']);
+        const complDate = parseDate(d['Completed On']);
+        if (isValid(regDate) && isValid(complDate)) {
+          const days = differenceInDays(complDate, regDate);
+          if (days >= 0) daysToClose.push(days);
+        }
+      }
+    });
+    const avgDaysToClose = daysToClose.length > 0
+      ? Math.round(daysToClose.reduce((a, b) => a + b, 0) / daysToClose.length)
+      : null;
+
+    return { total, lowRisk, highRisk, reoccurrenceRate, avgDaysToClose };
+  }, [dialogData]);
+
+  const selectedNc = useMemo(() => {
+    if (!selectedNcId || !dialogData) return null;
+    return dialogData.data.find(d => d.Id === selectedNcId) ?? null;
+  }, [selectedNcId, dialogData]);
 
   const handleSpecificBarClick = (data: any, type: 'low' | 'high' | 'total' | 'reoccurring') => {
       const quarterName = data.name;
@@ -356,19 +592,54 @@ export default function NonConformanceDashboard() {
       </div>
       {nonConformanceData.length > 0 ? <MainContent /> : <EmptyState />}
 
-      <Dialog open={!!dialogData} onOpenChange={(open) => !open && setDialogData(null)}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>{dialogData?.title}</DialogTitle>
-          </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto">
-            <DataTable
-              columns={detailColumns}
-              data={dialogData?.data || []}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DrillDownSheet
+        open={!!dialogData}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDialogData(null);
+            setSelectedNcId(null);
+            setNavigationLevel('list');
+          }
+        }}
+        title={navigationLevel === 'detail' && selectedNc
+          ? `NC-${selectedNc.Id}: ${selectedNc['Non Conformance Title']}`
+          : dialogData?.title ?? ''
+        }
+        breadcrumbs={navigationLevel === 'detail' ? [
+          { label: dialogData?.title ?? 'List', onClick: () => { setSelectedNcId(null); setNavigationLevel('list'); } }
+        ] : []}
+        onExportCsv={() => {
+          if (!dialogData) return;
+          exportToCsv(
+            dialogData.data,
+            [
+              { key: 'Id', header: 'ID' },
+              { key: 'Non Conformance Title', header: 'Title' },
+              { key: 'Classification', header: 'Classification' },
+              { key: 'Case Worker', header: 'Case Worker' },
+              { key: 'Registered By', header: 'Registered By' },
+              { key: 'Registration Time', header: 'Registration Time' },
+              { key: 'Completed On', header: 'Completed On' },
+              { key: 'Status', header: 'Status' },
+              { key: 'Reoccurrence', header: 'Reoccurrence' },
+              { key: 'Investigation summary', header: 'Investigation Summary' },
+              { key: 'Root cause description', header: 'Root Cause' },
+            ],
+            `nc-drill-down-${dialogData.title.replace(/\s+/g, '-').toLowerCase()}.csv`
+          );
+        }}
+      >
+        {navigationLevel === 'list' && dialogData && drillDownSummary && (
+          <NcListView
+            data={dialogData.data}
+            summary={drillDownSummary}
+            onSelectNc={(id) => { setSelectedNcId(id); setNavigationLevel('detail'); }}
+          />
+        )}
+        {navigationLevel === 'detail' && selectedNc && (
+          <NcDetailView nc={selectedNc} />
+        )}
+      </DrillDownSheet>
     </div>
   );
 }
