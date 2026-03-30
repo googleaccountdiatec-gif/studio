@@ -81,7 +81,7 @@ export default function ChangeActionDashboard() {
         const deadlineDate = parseDate(item.Deadline);
         const registrationDate = parseDate(item['Registration Time']);
         const isOverdue = isValid(deadlineDate) && isAfter(today, deadlineDate);
-        return { ...item, deadlineDate, registrationDate, isOverdue };
+        return { ...item, deadlineDate, registrationDate, isOverdue } as ChangeActionData;
       });
   }, [changeActionData]);
 

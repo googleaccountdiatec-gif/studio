@@ -291,7 +291,7 @@ export default function NonConformanceDashboard() {
     let data = nonConformanceData.map(item => ({
         ...item,
         registrationDate: parseDate(item["Registration Time"]),
-    }));
+    } as NonConformanceData));
 
     if (teamFilter === 'production') {
         data = data.filter(item => 
@@ -529,7 +529,7 @@ export default function NonConformanceDashboard() {
                         stroke="hsl(var(--primary))" 
                         strokeWidth={2} 
                         cursor="pointer" 
-                        activeDot={{ r: 8, onClick: (e, payload) => handleSpecificBarClick(payload.payload, 'reoccurring') }}
+                        activeDot={{ r: 8, onClick: (_e: any, payload: any) => handleSpecificBarClick(payload.payload, 'reoccurring') }}
                     />
                  </LineChart>
             </ResponsiveContainer>

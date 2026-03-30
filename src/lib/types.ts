@@ -15,6 +15,7 @@ export interface CapaData {
   'Proposed responsible'?: string;
   isOverdue?: boolean;
   effectiveDueDate?: Date;
+  [key: string]: any;
 }
 
 export interface DocumentKpiData {

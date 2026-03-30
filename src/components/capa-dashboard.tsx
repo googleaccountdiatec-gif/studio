@@ -146,7 +146,7 @@ export default function CapaDashboard() {
         isOverdue = isAfter(today, effectiveDueDate);
       }
 
-      return { ...item, isOverdue, effectiveDueDate };
+      return { ...item, isOverdue, effectiveDueDate } as CapaData;
     });
   }, [capaData, showCompleted, phaseFilter, teamFilter, productionTeam]);
 
