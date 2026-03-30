@@ -11,8 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { FileUp, CalendarIcon } from 'lucide-react';
+import { FileUp, CalendarIcon, ListTodo, AlertTriangle, BarChart3 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { CapaChart } from './capa-chart';
+import { cn } from '@/lib/utils';
+import { DrillDownSheet, SummaryBar, ExpandableDataTable } from '@/components/drill-down';
+import type { ExpandableColumn } from '@/components/drill-down';
+import { exportToCsv } from '@/lib/csv-export';
 
 interface BatchReleaseData {
   'Batch number': string;
@@ -30,6 +35,26 @@ interface BatchReleaseData {
   'Completed On': string;
   canonicalBatchNumber?: string;
   [key: string]: any;
+}
+
+interface ProcessedBatch {
+  id: string;
+  canonicalBatchNumber: string;
+  batchNumber: string;
+  batchNumberFromList: string;
+  projectNumber: string;
+  productNumber: string;
+  productName: string;
+  status: string;
+  completedDate: Date;
+  highRiskNC: number;
+  lowRiskNC: number;
+  productionType: string;
+  cloneName: string;
+  company: string;
+  aliases: string;
+  completedOn: string;
+  raw: BatchReleaseData;
 }
 
 const DATE_FORMATS = [
@@ -52,36 +77,50 @@ const parseDate = (dateString: string): Date => {
 
 export default function BatchReleaseDashboard() {
   const { batchReleaseData } = useData();
-  
+
   // Filters
   const [prodTypeFilter, setProdTypeFilter] = useState<string>('all');
   const [cloneFilter, setCloneFilter] = useState<string>('');
   const [customerFilter, setCustomerFilter] = useState<string>('');
-  
+
   // Year Selection State (Default to Current & Previous Year)
   const currentRealYear = new Date().getFullYear();
   const [selectedYears, setSelectedYears] = useState<number[]>([currentRealYear, currentRealYear - 1]);
 
-  const processedData = useMemo(() => {
+  // Drill-down state
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
+  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+  const [navigationLevel, setNavigationLevel] = useState<'list' | 'detail'>('list');
+
+  const processedData: ProcessedBatch[] = useMemo(() => {
     return batchReleaseData
       .filter(row => row['Final batch status'] === 'Approved')
-      .map((item: any) => ({
-        ...item,
-        canonicalBatchNumber: (item['Batch number from list'] && item['Batch number from list'].trim() !== '')
+      .map((item: any) => {
+        const canonical = (item['Batch number from list'] && item['Batch number from list'].trim() !== '')
           ? item['Batch number from list']
-          : item['Batch number'],
-      }))
-      .map(row => ({
-        id: row['Batch number'],
-        status: row['Final batch status'],
-        completedDate: parseDate(row['Completed On']),
-        highRiskNC: parseInt(row['High-risk nonconformance'] || '0', 10) || 0,
-        lowRiskNC: parseInt(row['Low-risk nonconformances'] || '0', 10) || 0,
-        productionType: row['Type of production'] || 'Unknown',
-        cloneName: row['Clone name'] || '',
-        company: row['Company'] || '',
-        aliases: row['Company aliases'] || ''
-      }))
+          : item['Batch number'];
+        const completedDate = parseDate(item['Completed On']);
+        return {
+          id: canonical || item['Batch number'],
+          canonicalBatchNumber: canonical,
+          batchNumber: item['Batch number'] || '',
+          batchNumberFromList: item['Batch number from list'] || '',
+          projectNumber: item['Project Number'] || '',
+          productNumber: item['Product number'] || '',
+          productName: item['Product Name'] || '',
+          status: item['Final batch status'],
+          completedDate,
+          highRiskNC: parseInt(item['High-risk nonconformance'] || '0', 10) || 0,
+          lowRiskNC: parseInt(item['Low-risk nonconformances'] || '0', 10) || 0,
+          productionType: item['Type of production'] || item['Type of Production'] || 'Unknown',
+          cloneName: item['Clone name'] || '',
+          company: item['Company'] || '',
+          aliases: item['Company aliases'] || '',
+          completedOn: item['Completed On'] || '',
+          raw: item,
+        } as ProcessedBatch;
+      })
       .filter(item => isValid(item.completedDate));
   }, [batchReleaseData]);
 
@@ -94,10 +133,10 @@ export default function BatchReleaseDashboard() {
     return processedData.filter(item => {
       const matchesType = prodTypeFilter === 'all' || item.productionType === prodTypeFilter;
       const matchesClone = cloneFilter === '' || item.cloneName.toLowerCase().includes(cloneFilter.toLowerCase());
-      const matchesCustomer = customerFilter === '' || 
+      const matchesCustomer = customerFilter === '' ||
                               item.company.toLowerCase().includes(customerFilter.toLowerCase()) ||
                               item.aliases.toLowerCase().includes(customerFilter.toLowerCase());
-      
+
       return matchesType && matchesClone && matchesCustomer;
     });
   }, [processedData, prodTypeFilter, cloneFilter, customerFilter]);
@@ -105,7 +144,7 @@ export default function BatchReleaseDashboard() {
   // Available years in the dataset + Current Year (always include current year)
   const availableYears = useMemo(() => {
     const years = new Set(filteredData.map(item => getYear(item.completedDate)));
-    years.add(currentRealYear); 
+    years.add(currentRealYear);
     return Array.from(years).sort((a, b) => b - a);
   }, [filteredData, currentRealYear]);
 
@@ -129,17 +168,17 @@ export default function BatchReleaseDashboard() {
   // --- Visualization 1: Monthly Approved Batches ---
   const monthlyChartData = useMemo(() => {
     const months = Array.from({ length: 12 }, (_, i) => {
-      const date = new Date(currentRealYear, i, 1); 
+      const date = new Date(currentRealYear, i, 1);
       const entry: any = {
         name: format(date, 'MMM'),
         monthIndex: i,
       };
-      
+
       // Initialize counts for all selected years
       selectedYears.forEach(y => {
           entry[y] = 0;
       });
-      
+
       return entry;
     });
 
@@ -175,6 +214,161 @@ export default function BatchReleaseDashboard() {
     };
   }, [filteredData, selectedYears]);
 
+  // --- Product Chart Data ---
+  const productChartData = useMemo(() => {
+    const productCounts: { [key: string]: number } = {};
+    filteredData.forEach(item => {
+      const year = getYear(item.completedDate);
+      if (selectedYears.includes(year)) {
+        const name = item.productName || 'Unknown';
+        productCounts[name] = (productCounts[name] || 0) + 1;
+      }
+    });
+    return Object.entries(productCounts)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+  }, [filteredData, selectedYears]);
+
+  // Filtered data for selected years (used in main table and drill-downs)
+  const yearFilteredData = useMemo(() => {
+    return filteredData.filter(item => {
+      const year = getYear(item.completedDate);
+      return selectedYears.includes(year);
+    });
+  }, [filteredData, selectedYears]);
+
+  // --- Product drill-down data ---
+  const productRecords = useMemo(() => {
+    if (!selectedProduct) return [];
+    return yearFilteredData.filter(item => (item.productName || 'Unknown') === selectedProduct);
+  }, [yearFilteredData, selectedProduct]);
+
+  const productSummary = useMemo(() => {
+    const total = productRecords.length;
+    if (total === 0) return { total: 0, avgNC: '0', highRiskCount: 0 };
+    const totalNC = productRecords.reduce((s, b) => s + b.lowRiskNC + b.highRiskNC, 0);
+    const highRiskCount = productRecords.filter(b => b.highRiskNC > 0).length;
+    return { total, avgNC: (totalNC / total).toFixed(2), highRiskCount };
+  }, [productRecords]);
+
+  // Selected batch for detail view (product sheet)
+  const selectedBatchFromProduct = useMemo(() => {
+    if (!selectedBatchId) return null;
+    return productRecords.find(b => b.id === selectedBatchId) ?? null;
+  }, [productRecords, selectedBatchId]);
+
+  // --- Month drill-down data ---
+  const monthRecords = useMemo(() => {
+    if (!selectedMonth) return [];
+    // selectedMonth is the short month name like "Jan", "Feb", etc.
+    const monthIndex = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(selectedMonth);
+    if (monthIndex === -1) return [];
+    return yearFilteredData.filter(item => getMonth(item.completedDate) === monthIndex);
+  }, [yearFilteredData, selectedMonth]);
+
+  const monthSummary = useMemo(() => {
+    const total = monthRecords.length;
+    if (total === 0) return { total: 0, avgNC: '0', highRiskCount: 0 };
+    const totalNC = monthRecords.reduce((s, b) => s + b.lowRiskNC + b.highRiskNC, 0);
+    const highRiskCount = monthRecords.filter(b => b.highRiskNC > 0).length;
+    return { total, avgNC: (totalNC / total).toFixed(2), highRiskCount };
+  }, [monthRecords]);
+
+  // Selected batch for detail view (month sheet)
+  const selectedBatchFromMonth = useMemo(() => {
+    if (!selectedBatchId) return null;
+    return monthRecords.find(b => b.id === selectedBatchId) ?? null;
+  }, [monthRecords, selectedBatchId]);
+
+  // ExpandableDataTable columns for batch data
+  const batchColumns: ExpandableColumn<ProcessedBatch>[] = [
+    { key: 'canonicalBatchNumber', header: 'Batch #', sortable: true },
+    { key: 'productName', header: 'Product Name', sortable: true },
+    { key: 'cloneName', header: 'Clone', sortable: true },
+    {
+      key: 'lowRiskNC',
+      header: 'Low NC',
+      sortable: true,
+      cell: (row) => <span className={cn(row.lowRiskNC > 0 && "text-amber-600 dark:text-amber-400 font-medium")}>{row.lowRiskNC}</span>
+    },
+    {
+      key: 'highRiskNC',
+      header: 'High NC',
+      sortable: true,
+      cell: (row) => <span className={cn(row.highRiskNC > 0 && "text-red-600 dark:text-red-400 font-medium")}>{row.highRiskNC}</span>
+    },
+    { key: 'company', header: 'Customer', sortable: true },
+  ];
+
+  // Render batch detail view (reused in product and month sheets)
+  const renderBatchDetail = (batch: ProcessedBatch) => (
+    <>
+      <div>
+        <h3 className="text-lg font-semibold">Batch {batch.canonicalBatchNumber}</h3>
+        <p className="text-sm text-muted-foreground">{batch.productName}</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="outline">{batch.productionType}</Badge>
+        {batch.highRiskNC > 0 && <Badge variant="destructive">High Risk NC: {batch.highRiskNC}</Badge>}
+        {batch.lowRiskNC > 0 && <Badge className="bg-amber-400 hover:bg-amber-500 text-black">Low Risk NC: {batch.lowRiskNC}</Badge>}
+        {batch.highRiskNC === 0 && batch.lowRiskNC === 0 && <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent">No NCs</Badge>}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+        <div>
+          <p className="text-xs text-muted-foreground">Canonical Batch #</p>
+          <p className="text-sm font-medium">{batch.canonicalBatchNumber || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Legacy Batch #</p>
+          <p className="text-sm font-medium">{batch.batchNumber || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Project Number</p>
+          <p className="text-sm font-medium">{batch.projectNumber || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Product Number</p>
+          <p className="text-sm font-medium">{batch.productNumber || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Product Name</p>
+          <p className="text-sm font-medium">{batch.productName || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Clone</p>
+          <p className="text-sm font-medium">{batch.cloneName || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Customer</p>
+          <p className="text-sm font-medium">{batch.company || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Production Type</p>
+          <p className="text-sm font-medium">{batch.productionType || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Low Risk NCs</p>
+          <p className="text-sm font-medium">{batch.lowRiskNC}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">High Risk NCs</p>
+          <p className="text-sm font-medium">{batch.highRiskNC}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Completed On</p>
+          <p className="text-sm font-medium">{batch.completedOn || 'N/A'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Status</p>
+          <p className="text-sm font-medium">{batch.status}</p>
+        </div>
+      </div>
+    </>
+  );
+
 
   if (batchReleaseData.length === 0) {
     return (
@@ -190,13 +384,13 @@ export default function BatchReleaseDashboard() {
   const getChartBars = () => {
       // Sort selected years to keep bar order consistent
       const sortedYears = [...selectedYears].sort((a, b) => a - b);
-      
+
       return sortedYears.map((year, index) => (
-          <Bar 
-            key={year} 
-            dataKey={year} 
-            name={`${year}`} 
-            fill={`hsl(var(--chart-${(index % 5) + 1}))`} 
+          <Bar
+            key={year}
+            dataKey={year}
+            name={`${year}`}
+            fill={`hsl(var(--chart-${(index % 5) + 1}))`}
             radius={[4, 4, 0, 0]}
           >
               <LabelList dataKey={year} position="top" fill="hsl(var(--foreground))" fontSize={10} formatter={(value: any) => value > 0 ? value : ''} />
@@ -205,8 +399,8 @@ export default function BatchReleaseDashboard() {
   };
 
   const toggleYear = (year: number) => {
-    setSelectedYears(prev => 
-        prev.includes(year) 
+    setSelectedYears(prev =>
+        prev.includes(year)
             ? prev.filter(y => y !== year)
             : [...prev, year]
     );
@@ -233,16 +427,16 @@ export default function BatchReleaseDashboard() {
             </div>
             <div className="space-y-2">
                 <Label>Clone Name</Label>
-                <Input 
-                    placeholder="Search clone..." 
+                <Input
+                    placeholder="Search clone..."
                     value={cloneFilter}
                     onChange={(e) => setCloneFilter(e.target.value)}
                 />
             </div>
             <div className="space-y-2">
                 <Label>Customer</Label>
-                <Input 
-                    placeholder="Search company..." 
+                <Input
+                    placeholder="Search company..."
                     value={customerFilter}
                     onChange={(e) => setCustomerFilter(e.target.value)}
                 />
@@ -253,8 +447,8 @@ export default function BatchReleaseDashboard() {
                     <PopoverTrigger asChild>
                         <Button variant="outline" className="w-full justify-start text-left font-normal">
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {selectedYears.length > 0 
-                                ? `${selectedYears.length} year${selectedYears.length !== 1 ? 's' : ''} selected` 
+                            {selectedYears.length > 0
+                                ? `${selectedYears.length} year${selectedYears.length !== 1 ? 's' : ''} selected`
                                 : "Select years"}
                         </Button>
                     </PopoverTrigger>
@@ -264,8 +458,8 @@ export default function BatchReleaseDashboard() {
                             <div className="grid gap-2">
                                 {availableYears.map(year => (
                                     <div key={year} className="flex items-center space-x-2 px-2 py-1 rounded hover:bg-muted/50">
-                                        <Checkbox 
-                                            id={`year-${year}`} 
+                                        <Checkbox
+                                            id={`year-${year}`}
                                             checked={selectedYears.includes(year)}
                                             onCheckedChange={() => toggleYear(year)}
                                         />
@@ -323,7 +517,17 @@ export default function BatchReleaseDashboard() {
         <GlassCard className="lg:col-span-2 p-6">
             <h3 className="text-lg font-semibold mb-4">Monthly Approved Batches</h3>
             <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={monthlyChartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <BarChart
+                  data={monthlyChartData}
+                  margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+                  onClick={(e) => {
+                    if (e && e.activeLabel) {
+                      setSelectedMonth(e.activeLabel as string);
+                      setSelectedBatchId(null);
+                      setNavigationLevel('list');
+                    }
+                  }}
+                >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" />
                     <YAxis />
@@ -362,6 +566,231 @@ export default function BatchReleaseDashboard() {
             </div>
         </GlassCard>
       </div>
+
+      {/* Batches by Product Chart */}
+      {productChartData.length > 0 && (
+        <GlassCard className="p-6">
+          <div className="h-[250px] w-full">
+            <CapaChart
+              data={productChartData}
+              title="Batches by Product"
+              dataKey="total"
+              onBarClick={(name) => {
+                setSelectedProduct(name);
+                setSelectedBatchId(null);
+                setNavigationLevel('list');
+              }}
+            />
+          </div>
+        </GlassCard>
+      )}
+
+      {/* Main Data Table */}
+      <GlassCard className="p-6">
+        <h3 className="text-lg font-semibold mb-4">Batch Release Data</h3>
+        <ExpandableDataTable<ProcessedBatch>
+          columns={batchColumns}
+          data={yearFilteredData}
+          getRowId={(row) => row.id}
+          getRowClassName={(row) => cn(row.highRiskNC > 0 && "bg-destructive/10")}
+          onRowClick={(row) => {
+            // Open the product sheet for this batch's product, then navigate to detail
+            setSelectedProduct(row.productName || 'Unknown');
+            setSelectedBatchId(row.id);
+            setNavigationLevel('detail');
+          }}
+          expandedContent={(row) => (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+              <div>
+                <span className="font-medium text-muted-foreground">Batch # (Legacy): </span>
+                {row.batchNumber || 'N/A'}
+              </div>
+              <div>
+                <span className="font-medium text-muted-foreground">Batch # (List): </span>
+                {row.batchNumberFromList || 'N/A'}
+              </div>
+              <div>
+                <span className="font-medium text-muted-foreground">Project Number: </span>
+                {row.projectNumber || 'N/A'}
+              </div>
+              <div>
+                <span className="font-medium text-muted-foreground">Production Type: </span>
+                {row.productionType}
+              </div>
+              <div>
+                <span className="font-medium text-muted-foreground">Completed On: </span>
+                {row.completedOn || 'N/A'}
+              </div>
+            </div>
+          )}
+        />
+      </GlassCard>
+
+      {/* Product Drill-Down Sheet */}
+      <DrillDownSheet
+        open={!!selectedProduct}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedProduct(null);
+            setSelectedBatchId(null);
+            setNavigationLevel('list');
+          }
+        }}
+        title={
+          navigationLevel === 'detail' && selectedBatchFromProduct
+            ? `Batch ${selectedBatchFromProduct.canonicalBatchNumber}`
+            : `Product: ${selectedProduct}`
+        }
+        breadcrumbs={
+          navigationLevel === 'detail'
+            ? [{ label: `${selectedProduct}`, onClick: () => { setSelectedBatchId(null); setNavigationLevel('list'); } }]
+            : []
+        }
+        onExportCsv={() => {
+          exportToCsv(
+            productRecords.map(r => r.raw),
+            [
+              { key: 'Batch number from list', header: 'Batch #' },
+              { key: 'Product Name', header: 'Product' },
+              { key: 'Clone name', header: 'Clone' },
+              { key: 'Low-risk nonconformances', header: 'Low Risk NC' },
+              { key: 'High-risk nonconformance', header: 'High Risk NC' },
+              { key: 'Company', header: 'Customer' },
+              { key: 'Type of Production', header: 'Production Type' },
+              { key: 'Completed On', header: 'Completed On' },
+            ],
+            `batch-product-${selectedProduct?.replace(/\s+/g, '-').toLowerCase() ?? 'export'}.csv`
+          );
+        }}
+      >
+        {navigationLevel === 'list' ? (
+          <>
+            <SummaryBar
+              metrics={[
+                { label: 'Total Batches', value: productSummary.total, icon: ListTodo },
+                { label: 'Avg NCs', value: productSummary.avgNC, icon: BarChart3 },
+                { label: 'High Risk Batches', value: productSummary.highRiskCount, color: productSummary.highRiskCount > 0 ? 'danger' : 'default', icon: AlertTriangle },
+              ]}
+            />
+
+            <ExpandableDataTable<ProcessedBatch>
+              columns={batchColumns}
+              data={productRecords}
+              getRowId={(row) => row.id}
+              getRowClassName={(row) => cn(row.highRiskNC > 0 && "bg-destructive/10")}
+              onRowClick={(row) => {
+                setSelectedBatchId(row.id);
+                setNavigationLevel('detail');
+              }}
+              expandedContent={(row) => (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <span className="font-medium text-muted-foreground">Batch # (Legacy): </span>
+                    {row.batchNumber || 'N/A'}
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Project Number: </span>
+                    {row.projectNumber || 'N/A'}
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Production Type: </span>
+                    {row.productionType}
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Completed On: </span>
+                    {row.completedOn || 'N/A'}
+                  </div>
+                </div>
+              )}
+            />
+          </>
+        ) : selectedBatchFromProduct ? (
+          renderBatchDetail(selectedBatchFromProduct)
+        ) : null}
+      </DrillDownSheet>
+
+      {/* Month Drill-Down Sheet */}
+      <DrillDownSheet
+        open={!!selectedMonth}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedMonth(null);
+            setSelectedBatchId(null);
+            setNavigationLevel('list');
+          }
+        }}
+        title={
+          navigationLevel === 'detail' && selectedBatchFromMonth
+            ? `Batch ${selectedBatchFromMonth.canonicalBatchNumber}`
+            : `Batches in ${selectedMonth}`
+        }
+        breadcrumbs={
+          navigationLevel === 'detail'
+            ? [{ label: `${selectedMonth} Batches`, onClick: () => { setSelectedBatchId(null); setNavigationLevel('list'); } }]
+            : []
+        }
+        onExportCsv={() => {
+          exportToCsv(
+            monthRecords.map(r => r.raw),
+            [
+              { key: 'Batch number from list', header: 'Batch #' },
+              { key: 'Product Name', header: 'Product' },
+              { key: 'Clone name', header: 'Clone' },
+              { key: 'Low-risk nonconformances', header: 'Low Risk NC' },
+              { key: 'High-risk nonconformance', header: 'High Risk NC' },
+              { key: 'Company', header: 'Customer' },
+              { key: 'Type of Production', header: 'Production Type' },
+              { key: 'Completed On', header: 'Completed On' },
+            ],
+            `batch-month-${selectedMonth?.toLowerCase() ?? 'export'}.csv`
+          );
+        }}
+      >
+        {navigationLevel === 'list' ? (
+          <>
+            <SummaryBar
+              metrics={[
+                { label: 'Total Batches', value: monthSummary.total, icon: ListTodo },
+                { label: 'Avg NCs', value: monthSummary.avgNC, icon: BarChart3 },
+                { label: 'High Risk Batches', value: monthSummary.highRiskCount, color: monthSummary.highRiskCount > 0 ? 'danger' : 'default', icon: AlertTriangle },
+              ]}
+            />
+
+            <ExpandableDataTable<ProcessedBatch>
+              columns={batchColumns}
+              data={monthRecords}
+              getRowId={(row) => row.id}
+              getRowClassName={(row) => cn(row.highRiskNC > 0 && "bg-destructive/10")}
+              onRowClick={(row) => {
+                setSelectedBatchId(row.id);
+                setNavigationLevel('detail');
+              }}
+              expandedContent={(row) => (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <span className="font-medium text-muted-foreground">Batch # (Legacy): </span>
+                    {row.batchNumber || 'N/A'}
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Project Number: </span>
+                    {row.projectNumber || 'N/A'}
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Production Type: </span>
+                    {row.productionType}
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Completed On: </span>
+                    {row.completedOn || 'N/A'}
+                  </div>
+                </div>
+              )}
+            />
+          </>
+        ) : selectedBatchFromMonth ? (
+          renderBatchDetail(selectedBatchFromMonth)
+        ) : null}
+      </DrillDownSheet>
     </div>
   );
 }
