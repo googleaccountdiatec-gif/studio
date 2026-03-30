@@ -13,6 +13,8 @@ import type { DocumentsInFlowMetrics } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { DrillDownSheet, SummaryBar, ExpandableDataTable } from '@/components/drill-down';
+import { exportToCsv } from '@/lib/csv-export';
 
 // --- Helper Functions ---
 
@@ -72,6 +74,7 @@ export default function CompendiumDashboard() {
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('auto-2-weeks');
   const [isSaving, setIsSaving] = useState(false);
+  const [drillThroughData, setDrillThroughData] = useState<{ title: string; items: any[] } | null>(null);
   const { toast } = useToast();
   const productionTeam = getProductionTeam();
 
@@ -386,7 +389,32 @@ export default function CompendiumDashboard() {
                         <XAxis type="number" hide />
                         <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12, fontWeight: 500 }} />
                         <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
-                        <Bar dataKey="count" name="Overdue Items" radius={[0, 4, 4, 0]} barSize={40} label={{ position: 'right', fill: 'hsl(var(--foreground))', fontSize: 12, offset: 5 }}>
+                        <Bar dataKey="count" name="Overdue Items" radius={[0, 4, 4, 0]} barSize={40} label={{ position: 'right', fill: 'hsl(var(--foreground))', fontSize: 12, offset: 5 }} cursor="pointer" onClick={(data: any) => {
+                            if (!data || !data.name) return
+                            const name = data.name as string
+                            let items: any[] = []
+                            if (name.includes('Non-Conformance')) {
+                              items = (nonConformanceData as any[]).filter(d => d['Pending Steps'] && d['Pending Steps'] !== '')
+                            } else if (name.includes('CAPA') && name.includes('Exec')) {
+                              items = (capaData as any[]).filter(d => d.isOverdue && (d['Pending Steps'] || '').includes('Execution'))
+                            } else if (name.includes('CAPA') && name.includes('Eff')) {
+                              items = (capaData as any[]).filter(d => d.isOverdue && (d['Pending Steps'] || '').includes('Effectiveness'))
+                            } else if (name.includes('Change')) {
+                              items = (changeActionData as any[]).filter(d => {
+                                const deadline = d['Deadline']
+                                if (!deadline) return false
+                                return d['Pending Steps'] && d['Pending Steps'] !== '' && new Date(deadline) < new Date()
+                              })
+                            } else if (name.includes('Training')) {
+                              items = (trainingData as any[]).filter(d => {
+                                const deadline = d['Deadline for completing training']
+                                return d['Pending Steps'] && d['Pending Steps'] !== '' && deadline && new Date(deadline) < new Date()
+                              })
+                            }
+                            if (items.length > 0) {
+                              setDrillThroughData({ title: `Overdue: ${name}`, items })
+                            }
+                          }}>
                             {
                                 overdueData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -499,6 +527,35 @@ export default function CompendiumDashboard() {
           <p className="text-xs text-muted-foreground text-center mt-3">Save a snapshot and select it from the history dropdown to track changes.</p>
         )}
       </GlassCard>
+
+      <DrillDownSheet
+        open={!!drillThroughData}
+        onOpenChange={(open) => !open && setDrillThroughData(null)}
+        title={drillThroughData?.title ?? ''}
+        onExportCsv={() => {
+          if (drillThroughData) {
+            exportToCsv(drillThroughData.items, [
+              { key: 'id', header: 'ID' },
+              { key: 'title', header: 'Title' },
+              { key: 'responsible', header: 'Responsible' },
+            ], `overdue_${new Date().toISOString().slice(0, 10)}.csv`)
+          }
+        }}
+      >
+        <SummaryBar metrics={[
+          { label: 'Overdue Items', value: drillThroughData?.items.length ?? 0, color: 'danger' as const },
+        ]} />
+        <ExpandableDataTable
+          columns={[
+            { key: 'id', header: 'ID', cell: (row: any) => row['CAPA ID'] || row['Id'] || row['Change_ActionID'] || row['Record training ID'] || '' },
+            { key: 'title', header: 'Title', cell: (row: any) => row['Title'] || row['Non Conformance Title'] || '' },
+            { key: 'responsible', header: 'Responsible', cell: (row: any) => row['Assigned To'] || row['Case Worker'] || row['Responsible'] || row['Trainee'] || '' },
+            { key: 'deadline', header: 'Deadline', cell: (row: any) => row['Due Date'] || row['Deadline'] || row['Deadline for completing training'] || '' },
+          ]}
+          data={drillThroughData?.items ?? []}
+          getRowId={(row: any) => String(row['CAPA ID'] || row['Id'] || row['Change_ActionID'] || row['Record training ID'] || Math.random())}
+        />
+      </DrillDownSheet>
 
     </div>
   );
