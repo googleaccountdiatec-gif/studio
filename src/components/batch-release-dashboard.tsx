@@ -16,14 +16,20 @@ import { Badge } from '@/components/ui/badge';
 
 interface BatchReleaseData {
   'Batch number': string;
+  'Batch number from list'?: string;
+  'Project Number'?: string;
+  'Product number'?: string;
+  'Product Name'?: string;
   'Final batch status': string;
-  'Completed On': string;
+  'Clone name': string;
   'High-risk nonconformance': string;
   'Low-risk nonconformances': string;
-  'Type of production': string;
-  'Clone name': string;
+  'Type of Production': string;
   'Company': string;
   'Company aliases': string;
+  'Completed On': string;
+  canonicalBatchNumber?: string;
+  [key: string]: any;
 }
 
 const DATE_FORMATS = [
@@ -59,6 +65,12 @@ export default function BatchReleaseDashboard() {
   const processedData = useMemo(() => {
     return batchReleaseData
       .filter(row => row['Final batch status'] === 'Approved')
+      .map((item: any) => ({
+        ...item,
+        canonicalBatchNumber: (item['Batch number from list'] && item['Batch number from list'].trim() !== '')
+          ? item['Batch number from list']
+          : item['Batch number'],
+      }))
       .map(row => ({
         id: row['Batch number'],
         status: row['Final batch status'],
