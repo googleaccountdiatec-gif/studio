@@ -24,16 +24,27 @@ import { Badge } from '@/components/ui/badge';
 const EXPECTED_HEADERS = ["Id", "Non Conformance Title", "Classification", "Pending Steps", "Case Worker", "Status", "Registration Time", "Registered By", "Reoccurrence"];
 
 interface NonConformanceData {
-  Id: string;
-  "Non Conformance Title": string;
-  Classification: "Low risk" | "High risk" | string;
-  "Pending Steps": string;
-  "Case Worker": string;
-  "Status": string;
-  "Registration Time": string;
-  "Registered By": string;
-  Reoccurrence: "YES" | "NO" | string;
+  'Id': string;
+  'Non Conformance Title': string;
+  'Classification': string;
+  'Pending Steps': string;
+  'Case Worker': string;
+  'Status': string;
+  'Registration Time': string;
+  'Registered By': string;
+  'Reoccurrence': string;
+  'Completed On'?: string;
+  'Impact Other'?: string;
+  'Investigation summary'?: string;
+  'Impact Assessment'?: string;
+  'Root cause description'?: string;
+  'Classification justification'?: string;
+  'Segregation of product'?: string;
+  'Discarded product'?: string;
+  'Started new production'?: string;
+  'Repeated operation/analysis'?: string;
   registrationDate: Date;
+  [key: string]: any;
 }
 
 const DATE_FORMATS = [
