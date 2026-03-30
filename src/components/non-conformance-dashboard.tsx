@@ -50,11 +50,13 @@ interface NonConformanceData {
 }
 
 const DATE_FORMATS = [
-  "dd/MM/yyyy hh:mm a", 
-  "dd/MM/yyyy H:mm", 
-  "dd/MM/yyyy", 
-  'M/d/yyyy', 
-  'MM/dd/yyyy', 
+  "dd/MM/yyyy hh:mm a",
+  "dd/MM/yyyy H:mm",
+  "dd/MM/yyyy",
+  "dd MMM yyyy HH:mm",
+  "dd MMM yyyy",
+  'M/d/yyyy',
+  'MM/dd/yyyy',
   'dd.MM.yyyy',
   "dd.MM.yyyy HH:mm"
 ];

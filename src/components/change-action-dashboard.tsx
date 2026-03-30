@@ -40,6 +40,8 @@ interface ChangeActionData {
 const DATE_FORMATS = [
   'dd/MM/yyyy HH:mm',
   'dd.MM.yyyy HH:mm',
+  'dd MMM yyyy HH:mm',
+  'dd MMM yyyy',
   'dd/MM/yyyy',
   'dd.MM.yyyy',
   'M/d/yyyy',

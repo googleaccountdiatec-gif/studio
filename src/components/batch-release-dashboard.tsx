@@ -61,6 +61,8 @@ const DATE_FORMATS = [
   'dd/MM/yyyy hh:mm a',
   'dd/MM/yyyy HH:mm',
   'dd/MM/yyyy',
+  'dd MMM yyyy HH:mm',
+  'dd MMM yyyy',
   'M/d/yyyy'
 ];
 
