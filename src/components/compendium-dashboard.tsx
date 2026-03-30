@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { DrillDownSheet, SummaryBar, ExpandableDataTable } from '@/components/drill-down';
+import { Badge } from '@/components/ui/badge';
 import { exportToCsv } from '@/lib/csv-export';
 
 // --- Helper Functions ---
@@ -74,7 +75,7 @@ export default function CompendiumDashboard() {
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('auto-2-weeks');
   const [isSaving, setIsSaving] = useState(false);
-  const [drillThroughData, setDrillThroughData] = useState<{ title: string; items: any[] } | null>(null);
+  const [drillThroughData, setDrillThroughData] = useState<{ title: string; items: any[]; category: string } | null>(null);
   const { toast } = useToast();
   const productionTeam = getProductionTeam();
 
@@ -245,6 +246,20 @@ export default function CompendiumDashboard() {
     ];
   }, [currentMetrics]);
 
+  // --- Helper: find closest snapshot to a target date ---
+  const findClosestSnapshot = (targetDate: Date) => {
+    if (snapshots.length === 0) return null;
+    let best: typeof snapshots[0] | null = null;
+    let bestDiff = Infinity;
+    for (const snap of snapshots) {
+      const date = snap.timestamp?.toDate ? snap.timestamp.toDate() : new Date(snap.timestamp);
+      if (!isValid(date)) continue;
+      const diff = Math.abs(differenceInDays(date, targetDate));
+      if (diff < bestDiff) { bestDiff = diff; best = snap; }
+    }
+    return best;
+  };
+
   // --- Bi-Weekly Changes Logic ---
   const { comparisonData, comparisonLabel, docFlowDeltas } = useMemo(() => {
     let pastCounts: any;
@@ -255,10 +270,19 @@ export default function CompendiumDashboard() {
     if (selectedSnapshotId === 'auto-2-weeks') {
         comparisonDate = subWeeks(new Date(), 2);
         pastCounts = getOverdueSnapshot(comparisonDate);
+        // Use closest saved snapshot for document flow deltas
+        const closestSnap = findClosestSnapshot(comparisonDate);
+        if (closestSnap?.metrics.documentsInFlow) {
+            pastDocFlow = closestSnap.metrics.documentsInFlow;
+        }
     } else if (selectedSnapshotId === 'auto-1-week') {
         comparisonDate = subWeeks(new Date(), 1);
         pastCounts = getOverdueSnapshot(comparisonDate);
         label = "since last week";
+        const closestSnap = findClosestSnapshot(comparisonDate);
+        if (closestSnap?.metrics.documentsInFlow) {
+            pastDocFlow = closestSnap.metrics.documentsInFlow;
+        }
     } else {
         const snap = snapshots.find(s => s.id === selectedSnapshotId);
         if (snap) {
@@ -284,7 +308,6 @@ export default function CompendiumDashboard() {
         { label: 'Training', delta: currentMetrics.training - pastCounts.training, fill: 'hsl(var(--chart-4))' },
     ];
 
-    // Documents in Flow deltas (only available from saved snapshots)
     const docDeltas = pastDocFlow ? {
         total: currentMetrics.documentsInFlow.total - pastDocFlow.total,
         majorRevisions: currentMetrics.documentsInFlow.majorRevisions - pastDocFlow.majorRevisions,
@@ -392,27 +415,48 @@ export default function CompendiumDashboard() {
                         <Bar dataKey="count" name="Overdue Items" radius={[0, 4, 4, 0]} barSize={40} label={{ position: 'right', fill: 'hsl(var(--foreground))', fontSize: 12, offset: 5 }} cursor="pointer" onClick={(data: any) => {
                             if (!data || !data.name) return
                             const name = data.name as string
+                            const now = new Date()
                             let items: any[] = []
                             if (name.includes('Non-Conformance')) {
-                              items = (nonConformanceData as any[]).filter(d => d['Pending Steps'] && d['Pending Steps'] !== '')
+                              items = (nonConformanceData as any[]).filter(d => {
+                                if (teamFilter === 'production') {
+                                  if (!productionTeam.includes(d['Case Worker']) && !productionTeam.includes(d['Registered By'])) return false
+                                }
+                                return d['Status'] === 'Deadline Exceeded'
+                              })
                             } else if (name.includes('CAPA') && name.includes('Exec')) {
-                              items = (capaData as any[]).filter(d => d.isOverdue && (d['Pending Steps'] || '').includes('Execution'))
+                              items = (capaData as any[]).filter(d => {
+                                if (teamFilter === 'production' && !productionTeam.includes(d['Assigned To'])) return false
+                                const pendingSteps = (d['Pending Steps']?.trim() || '').toLowerCase()
+                                if (pendingSteps.includes('effectiveness')) return false
+                                const deadlineStr = d['Deadline for effectiveness check'] || d['Due Date']
+                                return isTaskOverdue(deadlineStr, d['Completed On'], now)
+                              })
                             } else if (name.includes('CAPA') && name.includes('Eff')) {
-                              items = (capaData as any[]).filter(d => d.isOverdue && (d['Pending Steps'] || '').includes('Effectiveness'))
+                              items = (capaData as any[]).filter(d => {
+                                if (teamFilter === 'production' && !productionTeam.includes(d['Assigned To'])) return false
+                                const pendingSteps = (d['Pending Steps'] || '').trim()
+                                if (!pendingSteps.toLowerCase().includes('effectiveness')) return false
+                                const deadlineStr = d['Deadline for effectiveness check'] || d['Due Date']
+                                return isTaskOverdue(deadlineStr, d['Completed On'], now)
+                              })
                             } else if (name.includes('Change')) {
                               items = (changeActionData as any[]).filter(d => {
-                                const deadline = d['Deadline']
-                                if (!deadline) return false
-                                return d['Pending Steps'] && d['Pending Steps'] !== '' && new Date(deadline) < new Date()
+                                if (teamFilter === 'production' && !productionTeam.includes(d['Responsible'])) return false
+                                return isTaskOverdue(d['Deadline'], d['Completed On'], now)
                               })
                             } else if (name.includes('Training')) {
                               items = (trainingData as any[]).filter(d => {
-                                const deadline = d['Deadline for completing training']
-                                return d['Pending Steps'] && d['Pending Steps'] !== '' && deadline && new Date(deadline) < new Date()
+                                if (teamFilter === 'production' && !productionTeam.includes(d['Trainee'])) return false
+                                return isTaskOverdue(d['Deadline for completing training'], d['Completed On'], now)
                               })
                             }
+                            const category = name.includes('Non-Conformance') ? 'nc'
+                              : name.includes('CAPA') ? 'capa'
+                              : name.includes('Change') ? 'change-action'
+                              : name.includes('Training') ? 'training' : 'unknown'
                             if (items.length > 0) {
-                              setDrillThroughData({ title: `Overdue: ${name}`, items })
+                              setDrillThroughData({ title: `Overdue: ${name}`, items, category })
                             }
                           }}>
                             {
@@ -533,25 +577,93 @@ export default function CompendiumDashboard() {
         onOpenChange={(open) => !open && setDrillThroughData(null)}
         title={drillThroughData?.title ?? ''}
         onExportCsv={() => {
-          if (drillThroughData) {
-            exportToCsv(drillThroughData.items, [
-              { key: 'id', header: 'ID' },
-              { key: 'title', header: 'Title' },
-              { key: 'responsible', header: 'Responsible' },
-            ], `overdue_${new Date().toISOString().slice(0, 10)}.csv`)
-          }
+          if (!drillThroughData) return;
+          const cat = drillThroughData.category;
+          const cols = cat === 'capa'
+            ? [{ key: 'CAPA ID', header: 'ID' }, { key: 'Title', header: 'Title' }, { key: 'Priority', header: 'Priority' }, { key: 'Assigned To', header: 'Assigned To' }, { key: 'Pending Steps', header: 'Phase' }]
+            : cat === 'nc'
+            ? [{ key: 'Id', header: 'ID' }, { key: 'Non Conformance Title', header: 'Title' }, { key: 'Classification', header: 'Classification' }, { key: 'Case Worker', header: 'Case Worker' }, { key: 'Status', header: 'Status' }]
+            : cat === 'change-action'
+            ? [{ key: 'Change_ActionID', header: 'ID' }, { key: 'Title', header: 'Title' }, { key: 'Responsible', header: 'Responsible' }, { key: 'Deadline', header: 'Deadline' }, { key: 'Approve', header: 'Approval' }]
+            : [{ key: 'Record training ID', header: 'ID' }, { key: 'Title', header: 'Title' }, { key: 'Trainee', header: 'Trainee' }, { key: 'Deadline for completing training', header: 'Deadline' }, { key: 'Training category', header: 'Category' }];
+          exportToCsv(drillThroughData.items, cols, `overdue-${cat}_${new Date().toISOString().slice(0, 10)}.csv`);
         }}
       >
-        <SummaryBar metrics={[
-          { label: 'Overdue Items', value: drillThroughData?.items.length ?? 0, color: 'danger' as const },
-        ]} />
+        <SummaryBar metrics={(() => {
+          const items = drillThroughData?.items ?? [];
+          const cat = drillThroughData?.category;
+          const base = [{ label: 'Overdue Items', value: items.length, color: 'danger' as const }];
+          if (cat === 'capa') {
+            const highPrio = items.filter((r: any) => r['Priority']?.toLowerCase() === 'high').length;
+            if (highPrio > 0) base.push({ label: 'High Priority', value: highPrio, color: 'danger' as const });
+          } else if (cat === 'nc') {
+            const highRisk = items.filter((r: any) => r['Classification'] === 'High risk').length;
+            if (highRisk > 0) base.push({ label: 'High Risk', value: highRisk, color: 'danger' as const });
+          }
+          return base;
+        })()} />
         <ExpandableDataTable
-          columns={[
-            { key: 'id', header: 'ID', cell: (row: any) => row['CAPA ID'] || row['Id'] || row['Change_ActionID'] || row['Record training ID'] || '' },
-            { key: 'title', header: 'Title', cell: (row: any) => row['Title'] || row['Non Conformance Title'] || '' },
-            { key: 'responsible', header: 'Responsible', cell: (row: any) => row['Assigned To'] || row['Case Worker'] || row['Responsible'] || row['Trainee'] || '' },
-            { key: 'deadline', header: 'Deadline', cell: (row: any) => row['Due Date'] || row['Deadline'] || row['Deadline for completing training'] || '' },
-          ]}
+          columns={(() => {
+            const cat = drillThroughData?.category;
+            if (cat === 'capa') return [
+              { key: 'id', header: 'CAPA ID', cell: (row: any) => row['CAPA ID'] || '' },
+              { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[200px] truncate block">{row['Title'] || ''}</span> },
+              { key: 'priority', header: 'Priority', cell: (row: any) => {
+                const p = row['Priority']?.toLowerCase();
+                return <Badge variant={p === 'high' ? 'destructive' : 'secondary'}>{row['Priority'] || 'N/A'}</Badge>;
+              }},
+              { key: 'assignee', header: 'Assigned To', cell: (row: any) => row['Assigned To'] || '' },
+              { key: 'phase', header: 'Phase', cell: (row: any) => {
+                const steps = (row['Pending Steps'] || '').toLowerCase();
+                return <Badge variant="outline">{steps.includes('effectiveness') ? 'Effectiveness' : 'Execution'}</Badge>;
+              }},
+              { key: 'deadline', header: 'Deadline', cell: (row: any) => {
+                const steps = (row['Pending Steps'] || '').toLowerCase();
+                return steps.includes('effectiveness')
+                  ? (row['Deadline for effectiveness check'] || row['Due Date'] || '')
+                  : (row['Due Date'] || '');
+              }},
+            ];
+            if (cat === 'nc') return [
+              { key: 'id', header: 'NC ID', cell: (row: any) => row['Id'] || '' },
+              { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[200px] truncate block">{row['Non Conformance Title'] || row['Title'] || ''}</span> },
+              { key: 'classification', header: 'Risk', cell: (row: any) => {
+                const cls = row['Classification'];
+                return <Badge variant={cls === 'High risk' ? 'destructive' : 'secondary'}>{cls || 'Unknown'}</Badge>;
+              }},
+              { key: 'worker', header: 'Case Worker', cell: (row: any) => row['Case Worker'] || '' },
+              { key: 'reoccurrence', header: 'Reoccurrence', cell: (row: any) => {
+                const r = row['Reoccurrence']?.toUpperCase();
+                return <Badge variant={r === 'YES' ? 'destructive' : 'outline'}>{r || 'NO'}</Badge>;
+              }},
+              { key: 'status', header: 'Status', cell: (row: any) => <Badge variant="destructive">{row['Status'] || ''}</Badge> },
+            ];
+            if (cat === 'change-action') return [
+              { key: 'id', header: 'Action ID', cell: (row: any) => row['Change_ActionID'] || '' },
+              { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[200px] truncate block">{row['Title'] || ''}</span> },
+              { key: 'responsible', header: 'Responsible', cell: (row: any) => row['Responsible'] || '' },
+              { key: 'deadline', header: 'Deadline', cell: (row: any) => row['Deadline'] || '' },
+              { key: 'approval', header: 'Approval', cell: (row: any) => {
+                const a = row['Approve']?.trim().toLowerCase();
+                if (a === 'approved') return <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent">Approved</Badge>;
+                if (a) return <Badge variant="secondary">{row['Approve']}</Badge>;
+                return <Badge variant="outline">Pending</Badge>;
+              }},
+            ];
+            // training
+            return [
+              { key: 'id', header: 'Training ID', cell: (row: any) => row['Record training ID'] || '' },
+              { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[200px] truncate block">{row['Title'] || ''}</span> },
+              { key: 'trainee', header: 'Trainee', cell: (row: any) => row['Trainee'] || '' },
+              { key: 'category', header: 'Category', cell: (row: any) => row['Training category'] || '' },
+              { key: 'deadline', header: 'Deadline', cell: (row: any) => row['Deadline for completing training'] || '' },
+              { key: 'approval', header: 'Approval', cell: (row: any) => {
+                const a = row['Final training approval']?.trim();
+                if (a) return <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent">{a}</Badge>;
+                return <Badge variant="outline">Pending</Badge>;
+              }},
+            ];
+          })()}
           data={drillThroughData?.items ?? []}
           getRowId={(row: any) => String(row['CAPA ID'] || row['Id'] || row['Change_ActionID'] || row['Record training ID'] || Math.random())}
         />

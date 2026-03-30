@@ -61,7 +61,7 @@ export default function DocumentsInFlowDashboard() {
   const documentKpiData = rawDocumentKpiData as DocumentKpiData[];
 
   // --- State ---
-  const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
+  const [selectedDistPerson, setSelectedDistPerson] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [navigationLevel, setNavigationLevel] = useState<'list' | 'detail'>('list');
@@ -98,16 +98,19 @@ export default function DocumentsInFlowDashboard() {
       .sort((a, b) => b.total - a.total);
   }, [documentsInFlow]);
 
-  const authorChartData = useMemo(() => {
+  const distributionTeamData = useMemo(() => {
     const counts: Record<string, number> = {};
     documentsInFlow.forEach(doc => {
-      const author = doc['Author'] || 'Unknown';
-      counts[author] = (counts[author] || 0) + 1;
+      const list = doc['Distribution List'];
+      if (!list) return;
+      list.split(',').map(s => s.trim()).filter(Boolean).forEach(person => {
+        counts[person] = (counts[person] || 0) + 1;
+      });
     });
     return Object.entries(counts)
       .map(([name, total]) => ({ name, total }))
       .sort((a, b) => b.total - a.total)
-      .slice(0, 10);
+      .slice(0, 15);
   }, [documentsInFlow]);
 
   const kpiMetrics = useMemo(() => {
@@ -121,10 +124,13 @@ export default function DocumentsInFlowDashboard() {
     return { totalInFlow, periodicReviewRequired, authorizedCopies };
   }, [documentsInFlow]);
 
-  const authorDrillDownData = useMemo(() => {
-    if (!selectedAuthor) return [];
-    return documentsInFlow.filter(doc => (doc['Author'] || 'Unknown') === selectedAuthor);
-  }, [documentsInFlow, selectedAuthor]);
+  const distPersonDrillDownData = useMemo(() => {
+    if (!selectedDistPerson) return [];
+    return documentsInFlow.filter(doc => {
+      const list = (doc['Distribution List'] || '').split(',').map(s => s.trim());
+      return list.includes(selectedDistPerson);
+    });
+  }, [documentsInFlow, selectedDistPerson]);
 
   const statusDrillDownData = useMemo(() => {
     if (!selectedStatus) return [];
@@ -233,7 +239,7 @@ export default function DocumentsInFlowDashboard() {
   // --- Handlers ---
   const handleMainRowClick = (row: DocumentKpiData) => {
     setSelectedDocId(getDocId(row));
-    setSelectedAuthor(row['Author'] || 'Unknown');
+    setSelectedStatus(row['Pending Steps'] || 'Unknown');
     setNavigationLevel('detail');
   };
 
@@ -242,9 +248,9 @@ export default function DocumentsInFlowDashboard() {
     setNavigationLevel('detail');
   };
 
-  const handleAuthorSheetClose = (open: boolean) => {
+  const handleDistSheetClose = (open: boolean) => {
     if (!open) {
-      setSelectedAuthor(null);
+      setSelectedDistPerson(null);
       setSelectedDocId(null);
       setNavigationLevel('list');
     }
@@ -258,7 +264,7 @@ export default function DocumentsInFlowDashboard() {
     }
   };
 
-  const handleBackToAuthorList = () => {
+  const handleBackToDistList = () => {
     setSelectedDocId(null);
     setNavigationLevel('list');
   };
@@ -269,16 +275,17 @@ export default function DocumentsInFlowDashboard() {
   };
 
   // --- Summary metrics for drill-down ---
-  const getAuthorSummaryMetrics = (data: DocumentKpiData[]): SummaryMetric[] => [
-    { label: 'In Flow', value: data.length },
+  const getDistSummaryMetrics = (data: DocumentKpiData[]): SummaryMetric[] => [
+    { label: 'Documents', value: data.length },
+    {
+      label: 'Major Revisions',
+      value: data.filter(d => getRevisionType(d) === 'Major Revision').length,
+      color: data.filter(d => getRevisionType(d) === 'Major Revision').length > 0 ? 'warning' : 'default',
+    },
     {
       label: 'Periodic Review Required',
       value: data.filter(d => d['Periodic review of document']?.trim().toLowerCase() === 'required').length,
       color: data.filter(d => d['Periodic review of document']?.trim().toLowerCase() === 'required').length > 0 ? 'warning' : 'default',
-    },
-    {
-      label: 'Authorized Copies',
-      value: data.filter(d => d['Authorized copy']?.trim().toLowerCase() === 'yes').length,
     },
   ];
 
@@ -296,9 +303,9 @@ export default function DocumentsInFlowDashboard() {
   ];
 
   // --- Export handlers ---
-  const handleExportAuthorCsv = () => {
+  const handleExportDistCsv = () => {
     exportToCsv(
-      authorDrillDownData,
+      distPersonDrillDownData,
       [
         { key: 'Doc Prefix', header: 'Prefix' },
         { key: 'Doc Number', header: 'Doc Number' },
@@ -307,10 +314,9 @@ export default function DocumentsInFlowDashboard() {
         { key: 'Version', header: 'Version' },
         { key: 'Document Flow', header: 'Document Flow' },
         { key: 'Pending Steps', header: 'Status' },
-        { key: 'Change Reason', header: 'Change Reason' },
         { key: 'Responsible', header: 'Responsible' },
       ],
-      `documents-by-author-${selectedAuthor?.replace(/\s+/g, '_')}.csv`
+      `documents-distribution-${selectedDistPerson?.replace(/\s+/g, '_')}.csv`
     );
   };
 
@@ -523,14 +529,14 @@ export default function DocumentsInFlowDashboard() {
         </GlassCard>
       </div>
 
-      {/* Author chart */}
+      {/* Distribution Team chart */}
       <GlassCard className="p-6">
-        <div className="h-[350px] w-full">
+        <div className="h-[400px] w-full">
           <CapaChart
-            data={authorChartData}
-            title="Documents by Author (Top 10)"
+            data={distributionTeamData}
+            title="Distribution Team (Top 15)"
             dataKey="total"
-            onBarClick={(name) => setSelectedAuthor(name)}
+            onBarClick={(name) => setSelectedDistPerson(name)}
           />
         </div>
       </GlassCard>
@@ -547,27 +553,31 @@ export default function DocumentsInFlowDashboard() {
         />
       </GlassCard>
 
-      {/* Author DrillDownSheet */}
+      {/* Distribution Team DrillDownSheet */}
       <DrillDownSheet
-        open={!!selectedAuthor}
-        onOpenChange={handleAuthorSheetClose}
+        open={!!selectedDistPerson}
+        onOpenChange={handleDistSheetClose}
         title={navigationLevel === 'detail' && selectedDoc
           ? getDocId(selectedDoc)
-          : `Author: ${selectedAuthor}`
+          : `Distribution: ${selectedDistPerson}`
         }
         breadcrumbs={navigationLevel === 'detail' ? [
-          { label: `Author: ${selectedAuthor}`, onClick: handleBackToAuthorList },
+          { label: `Distribution: ${selectedDistPerson}`, onClick: handleBackToDistList },
         ] : []}
-        onExportCsv={navigationLevel === 'list' ? handleExportAuthorCsv : undefined}
+        onExportCsv={navigationLevel === 'list' ? handleExportDistCsv : undefined}
       >
         {navigationLevel === 'detail' && selectedDoc ? (
-          renderDocumentDetail(selectedDoc, handleBackToAuthorList, `Author: ${selectedAuthor}`)
+          renderDocumentDetail(selectedDoc, handleBackToDistList, `Distribution: ${selectedDistPerson}`)
         ) : (
           <div className="space-y-6">
-            <SummaryBar metrics={getAuthorSummaryMetrics(authorDrillDownData)} />
+            <SummaryBar metrics={getDistSummaryMetrics(distPersonDrillDownData)} />
             <ExpandableDataTable
-              columns={drillDownColumns}
-              data={authorDrillDownData}
+              columns={[
+                ...drillDownColumns.slice(0, 2),
+                { key: 'Author', header: 'Author', sortable: true, cell: (row: DocumentKpiData) => row['Author'] || 'Unknown' },
+                ...drillDownColumns.slice(2),
+              ]}
+              data={distPersonDrillDownData}
               getRowId={(row) => getDocId(row)}
               expandedContent={drillDownExpandedContent}
               onRowClick={handleDrillDownRowClick}
