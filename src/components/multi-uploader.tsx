@@ -38,9 +38,18 @@ const parseCustomCSV = (text: string): string[][] => {
         // Handle escaped quotes ("") -> become a single quote (")
         currentField += '"';
         i++; // Skip the next quote
+      } else if (inQuotes) {
+        // Only close the quoted field if " is followed by delimiter, newline, or EOF.
+        // This handles BizzMine data that contains unescaped quotes mid-field
+        // (e.g., ...SOP5034 "Impact assessment" section...).
+        if (nextChar === delimiter || nextChar === '\n' || nextChar === '\r' || nextChar === undefined) {
+          inQuotes = false;
+        } else {
+          currentField += '"';
+        }
       } else {
-        // Toggle quote state
-        inQuotes = !inQuotes;
+        // Opening quote
+        inQuotes = true;
       }
     } else if (char === delimiter && !inQuotes) {
       // Field separator (only if NOT in quotes)
