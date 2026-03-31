@@ -10,11 +10,14 @@ import { cn } from '@/lib/utils';
 
 // Robust CSV Parser with Auto-Detection and Quoted Field Support
 const parseCustomCSV = (text: string): string[][] => {
+  // Strip UTF-8 BOM (appears as ï»¿ when read with latin1 encoding, or \uFEFF with utf-8)
+  text = text.replace(/^\uFEFF/, '').replace(/^\xEF\xBB\xBF/, '');
+
   const rows: string[][] = [];
   let currentRow: string[] = [];
   let currentField = '';
   let inQuotes = false;
-  
+
   // 1. Auto-detect delimiter based on the first line
   const firstLine = text.split('\n')[0] || '';
   const commaCount = (firstLine.match(/,/g) || []).length;

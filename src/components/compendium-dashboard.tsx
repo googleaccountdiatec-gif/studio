@@ -29,8 +29,10 @@ const parseDate = (dateString: any): Date => {
     "dd.MM.yyyy HH:mm",
     "dd.MM.yyyy",
     "dd/MM/yyyy hh:mm a",
-    "dd/MM/yyyy HH:mm", 
+    "dd/MM/yyyy HH:mm",
     "dd/MM/yyyy",
+    "dd MMM yyyy HH:mm",
+    "dd MMM yyyy",
     "yyyy-MM-dd",
   ];
 

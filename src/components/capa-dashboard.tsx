@@ -42,6 +42,7 @@ const DATE_FORMATS = [
   'd MMM yyyy',
   'd-MMM-yyyy',
   'dd.MMM.yyyy',
+  'dd MMM yyyy HH:mm',
   'dd MMM yyyy',
   // US formats moved to the bottom as fallbacks
   'M/d/yyyy',
