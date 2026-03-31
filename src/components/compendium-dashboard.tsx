@@ -3,7 +3,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
-import { parse, isValid, startOfDay, isAfter, getQuarter, subWeeks, isBefore, endOfDay, format, differenceInDays, getISOWeek } from 'date-fns';
+import { isValid, startOfDay, isAfter, getQuarter, subWeeks, isBefore, endOfDay, format, differenceInDays, getISOWeek } from 'date-fns';
+import { parseDate } from '@/lib/date-utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts';
 import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -19,34 +20,6 @@ import { exportToCsv } from '@/lib/csv-export';
 
 // --- Helper Functions ---
 
-const parseDate = (dateString: any): Date => {
-  if (!dateString) return new Date('invalid');
-  const str = String(dateString).trim();
-  
-  // Try strictly formatted parses first
-  const formats = [
-    "dd.MM.yyyy HH:mm:ss", 
-    "dd.MM.yyyy HH:mm",
-    "dd.MM.yyyy",
-    "dd/MM/yyyy hh:mm a",
-    "dd/MM/yyyy HH:mm",
-    "dd/MM/yyyy",
-    "dd MMM yyyy HH:mm",
-    "dd MMM yyyy",
-    "yyyy-MM-dd",
-  ];
-
-  for (const fmt of formats) {
-    const parsed = parse(str, fmt, new Date());
-    if (isValid(parsed)) return parsed;
-  }
-
-  // Fallback to standard Date constructor (handles ISO etc)
-  const isoParsed = new Date(str);
-  if (isValid(isoParsed)) return isoParsed;
-  
-  return new Date('invalid');
-};
 
 /**
  * Determines if an item was overdue relative to a specific reference date.

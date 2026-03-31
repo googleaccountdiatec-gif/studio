@@ -3,7 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
-import { parse, isValid, startOfDay, isAfter, format, subDays } from 'date-fns';
+import { isValid, startOfDay, isAfter, format, subDays } from 'date-fns';
+import { parseDate } from '@/lib/date-utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
 import { DataTable, DataTableColumn } from './data-table';
 import { Badge } from './ui/badge';
@@ -42,63 +43,11 @@ interface ProcessedTrainingRecord {
   raw: TrainingData;
 }
 
-// Updated to match the robust list from the CAPA module
-const DATE_FORMATS = [
-  'dd/MM/yyyy',
-  'd/M/yyyy',
-  'dd.MM.yyyy',
-  'd.M.yyyy',
-  'yyyy-MM-dd',
-  // Abbreviated Month Formats
-  'dd.MMM.yy',
-  'dd MMM yy',
-  'dd-MMM-yy',
-  'd MMM yyyy',
-  'd-MMM-yyyy',
-  'dd.MMM.yyyy',
-  'dd MMM yyyy HH:mm',
-  'dd MMM yyyy',
-  // US formats
-  'M/d/yyyy',
-  'MM/dd/yyyy',
-  'M-d-yyyy',
-  'MM-dd-yyyy',
-];
-
-// Updated parsing logic to handle invisible characters and edge cases
-const parseTrainingDate = (dateString: string): Date => {
-  if (!dateString) return new Date('invalid');
-
-  // 1. Clean the string: remove invisible characters (BOM, zero-width spaces) and whitespace
-  const cleanString = dateString.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-
-  // 2. Specific handling for DD.MM.YYYY to avoid ambiguity
-  const ddMMyyyy = cleanString.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if (ddMMyyyy) {
-    const [, day, month, year] = ddMMyyyy;
-    const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
-    if (isValid(parsed)) return parsed;
-  }
-
-  // 3. Try parsing with date-fns using the expanded format list
-  for (const formatStr of DATE_FORMATS) {
-    const parsed = parse(cleanString, formatStr, new Date());
-    if (isValid(parsed)) {
-      return parsed;
-    }
-  }
-
-  // 4. Fallback: Native Date parsing (ISO strings)
-  const nativeDate = new Date(cleanString);
-  if (isValid(nativeDate)) return nativeDate;
-
-  return new Date('invalid');
-}
 
 const parseTrainingData = (row: TrainingData): ProcessedTrainingRecord => {
   const today = startOfDay(new Date());
 
-  const deadline = parseTrainingDate(row['Deadline for completing training']);
+  const deadline = parseDate(row['Deadline for completing training']);
 
   const pendingSteps = row['Pending Steps']?.trim();
   let status: ProcessedTrainingRecord['status'] = 'Pending';
@@ -254,7 +203,7 @@ export default function TrainingDashboard() {
   // Compute timeliness for detail view
   const computeTimeliness = (record: ProcessedTrainingRecord): string => {
     if (record.status !== 'Completed' || !record.completedOn) return 'N/A';
-    const completedDate = parseTrainingDate(record.completedOn);
+    const completedDate = parseDate(record.completedOn);
     if (!isValid(completedDate) || !isValid(record.deadline)) return 'N/A';
     const diffMs = completedDate.getTime() - record.deadline.getTime();
     const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));

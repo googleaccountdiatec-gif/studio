@@ -4,7 +4,8 @@ import React, { useState, useMemo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileUp, AlertTriangle, ListTodo, ArrowUpIcon, ArrowDownIcon, CheckCircle, ShieldCheck } from 'lucide-react';
-import { format, isAfter, parse, isValid, startOfDay, startOfMonth, subDays } from 'date-fns';
+import { format, isAfter, isValid, startOfDay, startOfMonth, subDays } from 'date-fns';
+import { parseDate } from '@/lib/date-utils';
 import { CapaChart } from './capa-chart';
 import { Skeleton } from './ui/skeleton';
 import { DataTable, DataTableColumn } from './data-table';
@@ -37,34 +38,6 @@ interface ChangeActionData {
   [key: string]: any;
 }
 
-const DATE_FORMATS = [
-  'dd/MM/yyyy HH:mm',
-  'dd.MM.yyyy HH:mm',
-  'dd MMM yyyy HH:mm',
-  'dd MMM yyyy',
-  'dd/MM/yyyy',
-  'dd.MM.yyyy',
-  'M/d/yyyy',
-  'MM/dd/yyyy'
-];
-
-const parseDate = (dateString: string): Date => {
-  if (!dateString) return new Date('invalid');
-
-  for (const formatStr of DATE_FORMATS) {
-    const parsed = parse(dateString.trim(), formatStr, new Date());
-    if (isValid(parsed)) {
-      return parsed;
-    }
-  }
-
-  const nativeParsed = new Date(dateString);
-  if (isValid(nativeParsed)) {
-    return nativeParsed;
-  }
-
-  return new Date('invalid');
-}
 
 export default function ChangeActionDashboard() {
   const { changeActionData, documentKpiData } = useData();

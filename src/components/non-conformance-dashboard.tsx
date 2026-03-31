@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { FileUp, CalendarIcon, CheckCircle2, XCircle } from 'lucide-react';
-import { format, parse, isValid, getQuarter, differenceInDays } from 'date-fns';
+import { format, isValid, getQuarter, differenceInDays } from 'date-fns';
+import { parseDate } from '@/lib/date-utils';
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from './ui/skeleton';
 import { DataTable, DataTableColumn } from './data-table';
@@ -49,29 +50,6 @@ interface NonConformanceData {
   [key: string]: any;
 }
 
-const DATE_FORMATS = [
-  "dd/MM/yyyy hh:mm a",
-  "dd/MM/yyyy H:mm",
-  "dd/MM/yyyy",
-  "dd MMM yyyy HH:mm",
-  "dd MMM yyyy",
-  'M/d/yyyy',
-  'MM/dd/yyyy',
-  'dd.MM.yyyy',
-  "dd.MM.yyyy HH:mm"
-];
-
-const parseDate = (dateString: string): Date => {
-  if (!dateString) return new Date('invalid');
-  for (const fmt of DATE_FORMATS) {
-    const parsed = parse(dateString.trim(), fmt, new Date());
-    if (isValid(parsed)) return parsed;
-  }
-  const isoParsed = new Date(dateString);
-  if (isValid(isoParsed)) return isoParsed;
-
-  return new Date('invalid');
-};
 
 // --- Corrective action boolean helper ---
 const CORRECTIVE_ACTIONS = [

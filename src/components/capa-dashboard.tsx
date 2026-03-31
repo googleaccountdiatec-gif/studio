@@ -8,7 +8,8 @@ import { Calendar as CalendarIcon, FileUp, Users, AlertTriangle, CheckCircle, Li
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format, isAfter, parse, isValid, startOfDay, subDays } from 'date-fns';
+import { format, isAfter, isValid, startOfDay, subDays } from 'date-fns';
+import { parseDate } from '@/lib/date-utils';
 import { useToast } from "@/hooks/use-toast";
 import type { CapaData } from '@/lib/types';
 import { KpiCard } from './kpi-card';
@@ -29,56 +30,6 @@ import { exportToCsv } from '@/lib/csv-export';
 import { findLinkedDocuments } from '@/lib/cross-references';
 
 
-const DATE_FORMATS = [
-  'dd/MM/yyyy',
-  'd/M/yyyy',
-  'dd.MM.yyyy',
-  'd.M.yyyy',
-  'yyyy-MM-dd',
-  // Abbreviated Month Formats (Jan, Feb, etc.)
-  'dd.MMM.yy',
-  'dd MMM yy',
-  'dd-MMM-yy',
-  'd MMM yyyy',
-  'd-MMM-yyyy',
-  'dd.MMM.yyyy',
-  'dd MMM yyyy HH:mm',
-  'dd MMM yyyy',
-  // US formats moved to the bottom as fallbacks
-  'M/d/yyyy',
-  'MM/dd/yyyy',
-  'M-d-yyyy',
-  'MM-dd-yyyy',
-];
-
-const parseDate = (dateString: string): Date => {
-  if (!dateString) return new Date('invalid');
-
-  // Clean the string: remove invisible characters, trim whitespace
-  const cleanString = dateString.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-
-  // Specific handling for DD.MM.YYYY (very common in your files) to avoid ambiguity
-  const ddMMyyyy = cleanString.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if (ddMMyyyy) {
-    const [, day, month, year] = ddMMyyyy;
-    const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
-    if (isValid(parsed)) return parsed;
-  }
-
-  // Try parsing with date-fns
-  for (const formatStr of DATE_FORMATS) {
-    const parsedDate = parse(cleanString, formatStr, new Date());
-    if (isValid(parsedDate)) {
-      return parsedDate;
-    }
-  }
-
-  // Fallback: Try native Date parsing (good for ISO strings)
-  const nativeDate = new Date(cleanString);
-  if (isValid(nativeDate)) return nativeDate;
-
-  return new Date('invalid');
-}
 
 export default function CapaDashboard() {
   const { capaData, documentKpiData } = useData();

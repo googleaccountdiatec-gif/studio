@@ -171,7 +171,7 @@ export function MultiUploader() {
           toast({ variant: "destructive", title: "Read Error", description: `Failed to read file "${file.name}".` });
       };
 
-      reader.readAsText(file, 'latin1');
+      reader.readAsText(file, 'utf-8');
     });
   };
 

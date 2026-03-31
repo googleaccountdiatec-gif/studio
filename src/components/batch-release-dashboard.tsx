@@ -3,7 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
-import { parse, isValid, getMonth, getYear, format } from 'date-fns';
+import { isValid, getMonth, getYear, format } from 'date-fns';
+import { parseDate } from '@/lib/date-utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, LabelList } from 'recharts';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -57,25 +58,6 @@ interface ProcessedBatch {
   raw: BatchReleaseData;
 }
 
-const DATE_FORMATS = [
-  'dd/MM/yyyy hh:mm a',
-  'dd/MM/yyyy HH:mm',
-  'dd/MM/yyyy',
-  'dd MMM yyyy HH:mm',
-  'dd MMM yyyy',
-  'M/d/yyyy'
-];
-
-const parseDate = (dateString: string): Date => {
-  if (!dateString) return new Date('invalid');
-  for (const fmt of DATE_FORMATS) {
-    const parsed = parse(dateString.trim(), fmt, new Date());
-    if (isValid(parsed)) return parsed;
-  }
-  const isoParsed = new Date(dateString);
-  if (isValid(isoParsed)) return isoParsed;
-  return new Date('invalid');
-};
 
 export default function BatchReleaseDashboard() {
   const { batchReleaseData } = useData();
