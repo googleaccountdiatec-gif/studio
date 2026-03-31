@@ -8,7 +8,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Build:** `npm run build` (sets NODE_ENV=production)
 - **Lint:** `npm run lint`
 - **Type check:** `npm run typecheck`
-- **Genkit AI dev:** `npm run genkit:dev` or `npm run genkit:watch`
 
 ## Architecture
 
@@ -34,7 +33,6 @@ Single page app (`src/app/page.tsx`) with tabbed navigation:
 - **UI Components:** shadcn/ui (Radix primitives + Tailwind). Components in `src/components/ui/`. Config in `components.json`.
 - **Charts:** Recharts. Clickable charts drill down into data tables.
 - **Theming:** `next-themes` with 5 themes: light, dark, rose, slate, curida. CSS variables defined in `src/app/globals.css`.
-- **AI:** Genkit with Google AI (Gemini 2.5 Flash) for CAPA summarization. Flows in `src/ai/flows/`. Server actions pattern (`'use server'`).
 - **Path alias:** `@/*` maps to `./src/*`.
 - **All dashboard components are client components** (`"use client"`).
 

@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Calendar as CalendarIcon, FileUp, Users, AlertTriangle, CheckCircle, ListTodo, Columns, Sparkles } from 'lucide-react';
+import { Calendar as CalendarIcon, FileUp, Users, AlertTriangle, CheckCircle, ListTodo, Columns } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
@@ -19,7 +19,6 @@ import { Skeleton } from './ui/skeleton';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { summarizeCapas } from '@/ai/flows/summarize-capas-flow';
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
 import { getProductionTeam } from '@/lib/teams';
@@ -34,14 +33,12 @@ import { findLinkedDocuments } from '@/lib/cross-references';
 export default function CapaDashboard() {
   const { capaData, documentKpiData } = useData();
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [isSummarizing, setIsSummarizing] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [phaseFilter, setPhaseFilter] = useState<'all' | 'execution' | 'effectiveness'>('all');
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const [selectedAssignee, setSelectedAssignee] = useState<string | null>(null);
   const [selectedCapaId, setSelectedCapaId] = useState<string | null>(null);
   const [navigationLevel, setNavigationLevel] = useState<'list' | 'detail'>('list');
-  const [summary, setSummary] = useState<string | null>(null);
   const { toast } = useToast();
   const productionTeam = getProductionTeam();
 
@@ -51,23 +48,6 @@ export default function CapaDashboard() {
     'Pending Steps': true,
   });
 
-  const handleSummarize = async () => {
-    setIsSummarizing(true);
-    setSummary(null);
-    try {
-      const result = await summarizeCapas(filteredData);
-      setSummary(result.summary);
-    } catch (error) {
-      console.error("Error summarizing CAPA data:", error);
-      toast({
-        variant: "destructive",
-        title: "AI Summarization Error",
-        description: "There was an error generating the summary.",
-      });
-    } finally {
-      setIsSummarizing(false);
-    }
-  };
 
   const processedData = useMemo(() => {
     const today = startOfDay(new Date());
@@ -423,15 +403,6 @@ export default function CapaDashboard() {
             </div>
 
             <div className='flex items-center gap-2 ml-auto'>
-                <Button
-                    variant="outline"
-                    onClick={handleSummarize}
-                    disabled={isSummarizing || capaData.length === 0}
-                >
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    {isSummarizing ? "Summarizing..." : "Summarize with AI"}
-                </Button>
-
                 <Popover>
                     <PopoverTrigger asChild>
                         <Button

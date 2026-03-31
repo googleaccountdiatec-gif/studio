@@ -1,8 +1,6 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { MetricSnapshot } from '@/lib/types';
 
 interface CapaData { [key: string]: any; }
@@ -43,6 +41,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchSnapshots = async () => {
     try {
+      const { getDb } = await import('@/lib/firebase');
+      const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
+      const db = getDb();
       const q = query(collection(db, 'biweekly_snapshots'), orderBy('timestamp', 'desc'), limit(10));
       const querySnapshot = await getDocs(q);
       const fetchedSnapshots: MetricSnapshot[] = [];
@@ -67,6 +68,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const saveSnapshot = async (metrics: MetricSnapshot['metrics']) => {
     const timeoutMs = 15000;
     try {
+      const { getDb } = await import('@/lib/firebase');
+      const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+      const db = getDb();
       const savePromise = addDoc(collection(db, 'biweekly_snapshots'), {
         timestamp: serverTimestamp(),
         metrics

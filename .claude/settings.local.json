@@ -4,7 +4,9 @@
       "Bash(cd:*)",
       "Bash(npx tsc:*)",
       "Bash(npm run:*)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(npm install:*)",
+      "Bash(npm --version)"
     ]
   }
 }

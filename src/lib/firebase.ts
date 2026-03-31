@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,20 +10,23 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Validate that required Firebase config values are present
-const missingVars = Object.entries(firebaseConfig)
-  .filter(([, value]) => !value)
-  .map(([key]) => key);
+let _db: Firestore | undefined;
 
-if (missingVars.length > 0) {
-  console.error(
-    `Firebase initialization failed: missing environment variables for: ${missingVars.join(', ')}. ` +
-    `Ensure NEXT_PUBLIC_FIREBASE_* variables are set in .env.local (for local dev) or apphosting.yaml (for deployment).`
-  );
+export function getDb(): Firestore {
+  if (_db) return _db;
+
+  const missingVars = Object.entries(firebaseConfig)
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+
+  if (missingVars.length > 0) {
+    console.error(
+      `Firebase initialization failed: missing environment variables for: ${missingVars.join(', ')}. ` +
+      `Ensure NEXT_PUBLIC_FIREBASE_* variables are set in .env.local (for local dev) or apphosting.yaml (for deployment).`
+    );
+  }
+
+  const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+  _db = getFirestore(app, 'kpichanges');
+  return _db;
 }
-
-// Initialize Firebase
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const db = getFirestore(app, 'kpichanges');
-
-export { db };

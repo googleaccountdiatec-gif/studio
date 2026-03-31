@@ -271,9 +271,28 @@ export default function NonConformanceDashboard() {
         registrationDate: parseDate(item["Registration Time"]),
     } as NonConformanceData));
 
+    // Diagnostic: log date parsing results to help debug import issues
+    if (data.length > 0) {
+      const yearCounts: Record<string, number> = {};
+      let invalidCount = 0;
+      data.forEach(d => {
+        if (isValid(d.registrationDate)) {
+          const y = d.registrationDate.getFullYear();
+          yearCounts[y] = (yearCounts[y] || 0) + 1;
+        } else {
+          invalidCount++;
+        }
+      });
+      console.log('[NC Dashboard] Parsed', data.length, 'records. Years:', yearCounts, 'Invalid dates:', invalidCount);
+      if (invalidCount > 0) {
+        const sample = data.find(d => !isValid(d.registrationDate));
+        console.log('[NC Dashboard] Sample invalid Registration Time:', JSON.stringify(sample?.["Registration Time"]));
+      }
+    }
+
     if (teamFilter === 'production') {
-        data = data.filter(item => 
-            productionTeam.includes(item["Case Worker"]) || 
+        data = data.filter(item =>
+            productionTeam.includes(item["Case Worker"]) ||
             productionTeam.includes(item["Registered By"])
         );
     }
