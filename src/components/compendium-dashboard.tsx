@@ -51,6 +51,8 @@ export default function CompendiumDashboard() {
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('auto-2-weeks');
   const [isSaving, setIsSaving] = useState(false);
   const [drillThroughData, setDrillThroughData] = useState<{ title: string; items: any[]; category: string } | null>(null);
+  const [ncDrillData, setNcDrillData] = useState<{ title: string; items: any[]; filterType: 'all' | 'low' | 'high' | 'reoccurring' } | null>(null);
+  const [docFlowDrillData, setDocFlowDrillData] = useState<{ title: string; items: any[] } | null>(null);
   const [ncYearRange, setNcYearRange] = useState<string>('current-prev');
   const { toast } = useToast();
   const productionTeam = getProductionTeam();
@@ -109,12 +111,12 @@ export default function CompendiumDashboard() {
     const years = [...ncSelectedYears].sort((a, b) => a - b);
     const quarters = [1, 2, 3, 4];
 
-    const aggregated: { [key: string]: { lowRisk: number; highRisk: number; total: number; reoccurring: number } } = {};
+    const aggregated: { [key: string]: { lowRisk: number; highRisk: number; total: number; reoccurring: number; records: any[] } } = {};
 
     years.forEach(year => {
       quarters.forEach(q => {
         const key = `${year}-Q${q}`;
-        aggregated[key] = { lowRisk: 0, highRisk: 0, total: 0, reoccurring: 0 };
+        aggregated[key] = { lowRisk: 0, highRisk: 0, total: 0, reoccurring: 0, records: [] };
       });
     });
 
@@ -138,6 +140,7 @@ export default function CompendiumDashboard() {
 
       if (aggregated[key]) {
         aggregated[key].total++;
+        aggregated[key].records.push(item);
         if (item.Classification === 'Low risk') aggregated[key].lowRisk++;
         if (item.Classification === 'High risk') aggregated[key].highRisk++;
         if (item.Reoccurrence === 'YES') aggregated[key].reoccurring++;
@@ -161,7 +164,9 @@ export default function CompendiumDashboard() {
        if (teamFilter === 'production' && !productionTeam.includes(item['Assigned To'])) return;
        const pendingSteps = item['Pending Steps']?.trim() || "";
        const isEffectiveness = pendingSteps.toLowerCase().includes('effectiveness');
-       const deadlineStr = item['Deadline for effectiveness check'] || item['Due Date'];
+       const deadlineStr = isEffectiveness
+         ? (item['Deadline for effectiveness check'] || item['Due Date'])
+         : item['Due Date'];
 
        if (isTaskOverdue(deadlineStr, item['Completed On'], referenceDate)) {
            if (isEffectiveness) capaEffectiveness++;
@@ -335,6 +340,47 @@ export default function CompendiumDashboard() {
 
   const documentsInFlowSummary = currentMetrics.documentsInFlow;
 
+  const handleNcBarClick = (data: any, type: 'low' | 'high' | 'total') => {
+    const quarterName = data?.name;
+    const quarterInfo = ncChartData.find(q => q.name === quarterName);
+    if (!quarterInfo || quarterInfo.records.length === 0) return;
+
+    let records = quarterInfo.records;
+    let title = '';
+    if (type === 'low') {
+      records = records.filter((r: any) => r.Classification === 'Low risk');
+      title = `Low Risk NCs — ${quarterName}`;
+    } else if (type === 'high') {
+      records = records.filter((r: any) => r.Classification === 'High risk');
+      title = `High Risk NCs — ${quarterName}`;
+    } else {
+      title = `All NCs — ${quarterName}`;
+    }
+    if (records.length > 0) setNcDrillData({ title, items: records, filterType: type === 'low' ? 'low' : type === 'high' ? 'high' : 'all' });
+  };
+
+  const handleNcReoccurrenceClick = (payload: any) => {
+    const data = payload?.payload || payload;
+    const quarterName = data?.name;
+    const quarterInfo = ncChartData.find(q => q.name === quarterName);
+    if (!quarterInfo) return;
+    const records = quarterInfo.records.filter((r: any) => r.Reoccurrence === 'YES');
+    if (records.length > 0) setNcDrillData({ title: `Reoccurring NCs — ${quarterName}`, items: records, filterType: 'reoccurring' });
+  };
+
+  const handleDocFlowDrill = (type: 'total' | 'major' | 'minor' | 'new') => {
+    const docs = documentKpiData.filter(doc => {
+      if (teamFilter === 'production' && !productionTeam.includes(doc['Responsible'])) return false;
+      if (!doc['Pending Steps'] || doc['Pending Steps'].trim() === '') return false;
+      if (type === 'total') return true;
+      const flow = (doc['Document Flow'] || '').toLowerCase();
+      if (type === 'major') return flow.includes('major');
+      if (type === 'minor') return flow.includes('minor');
+      return flow.includes('create') || flow.includes('new');
+    });
+    const labels: Record<string, string> = { total: 'All Documents in Flow', major: 'Major Revisions in Flow', minor: 'Minor Revisions in Flow', new: 'New Documents in Flow' };
+    if (docs.length > 0) setDocFlowDrillData({ title: labels[type], items: docs });
+  };
 
   return (
     <div className="space-y-6">
@@ -365,9 +411,9 @@ export default function CompendiumDashboard() {
                     <YAxis width={30} tick={{fontSize: 10}} />
                     <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
                     <Legend wrapperStyle={{fontSize: '12px'}} />
-                    <Bar dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-4))"  />
-                    <Bar dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-2))"  />
-                    <Bar dataKey="total" name="Total" fill="hsl(var(--chart-1))"  />
+                    <Bar dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-4))" cursor="pointer" onClick={(data: any) => handleNcBarClick(data, 'low')} />
+                    <Bar dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-2))" cursor="pointer" onClick={(data: any) => handleNcBarClick(data, 'high')} />
+                    <Bar dataKey="total" name="Total" fill="hsl(var(--chart-1))" cursor="pointer" onClick={(data: any) => handleNcBarClick(data, 'total')} />
                 </BarChart>
             </ResponsiveContainer>
         </GlassCard>
@@ -396,7 +442,7 @@ export default function CompendiumDashboard() {
                     <YAxis width={30} tick={{fontSize: 10}} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
                     <Legend wrapperStyle={{fontSize: '12px'}} />
-                    <Line type="monotone" dataKey="reoccurring" name="Reoccurring" stroke="hsl(var(--primary))" strokeWidth={2} dot={{r: 4}} />
+                    <Line type="monotone" dataKey="reoccurring" name="Reoccurring" stroke="hsl(var(--primary))" strokeWidth={2} dot={{r: 4}} cursor="pointer" activeDot={{ r: 8, onClick: (_e: any, payload: any) => handleNcReoccurrenceClick(payload) }} />
                  </LineChart>
             </ResponsiveContainer>
         </GlassCard>
@@ -455,8 +501,7 @@ export default function CompendiumDashboard() {
                                 if (teamFilter === 'production' && !productionTeam.includes(d['Assigned To'])) return false
                                 const pendingSteps = (d['Pending Steps']?.trim() || '').toLowerCase()
                                 if (pendingSteps.includes('effectiveness')) return false
-                                const deadlineStr = d['Deadline for effectiveness check'] || d['Due Date']
-                                return isTaskOverdue(deadlineStr, d['Completed On'], now)
+                                return isTaskOverdue(d['Due Date'], d['Completed On'], now)
                               })
                             } else if (name.includes('CAPA') && name.includes('Eff')) {
                               items = (capaData as any[]).filter(d => {
@@ -540,7 +585,7 @@ export default function CompendiumDashboard() {
       <GlassCard className="p-6">
         <h3 className="text-lg font-semibold mb-4">Documents in Flow Summary</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center items-center py-4">
-             <div>
+             <div className="cursor-pointer rounded-lg p-3 transition-colors hover:bg-muted/50" onClick={() => handleDocFlowDrill('total')}>
                 <p className="text-4xl font-bold text-primary">{documentsInFlowSummary.total}</p>
                 <p className="text-sm text-muted-foreground mt-1">Total In Flow</p>
                 {docFlowDeltas && (
@@ -553,7 +598,7 @@ export default function CompendiumDashboard() {
                   </div>
                 )}
             </div>
-            <div>
+            <div className="cursor-pointer rounded-lg p-3 transition-colors hover:bg-muted/50" onClick={() => handleDocFlowDrill('major')}>
                 <p className="text-3xl font-bold">{documentsInFlowSummary.majorRevisions}</p>
                 <p className="text-sm text-muted-foreground mt-1">Major Revisions</p>
                 {docFlowDeltas && (
@@ -566,7 +611,7 @@ export default function CompendiumDashboard() {
                   </div>
                 )}
             </div>
-            <div>
+            <div className="cursor-pointer rounded-lg p-3 transition-colors hover:bg-muted/50" onClick={() => handleDocFlowDrill('minor')}>
                 <p className="text-3xl font-bold">{documentsInFlowSummary.minorRevisions}</p>
                 <p className="text-sm text-muted-foreground mt-1">Minor Revisions</p>
                 {docFlowDeltas && (
@@ -579,7 +624,7 @@ export default function CompendiumDashboard() {
                   </div>
                 )}
             </div>
-            <div>
+            <div className="cursor-pointer rounded-lg p-3 transition-colors hover:bg-muted/50" onClick={() => handleDocFlowDrill('new')}>
                 <p className="text-3xl font-bold">{documentsInFlowSummary.newDocuments}</p>
                 <p className="text-sm text-muted-foreground mt-1">New Documents</p>
                 {docFlowDeltas && (
@@ -692,6 +737,162 @@ export default function CompendiumDashboard() {
           })()}
           data={drillThroughData?.items ?? []}
           getRowId={(row: any) => String(row['CAPA ID'] || row['Id'] || row['Change_ActionID'] || row['Record training ID'] || Math.random())}
+        />
+      </DrillDownSheet>
+
+      {/* NC Chart Drill-Down Sheet */}
+      <DrillDownSheet
+        open={!!ncDrillData}
+        onOpenChange={(open) => !open && setNcDrillData(null)}
+        title={ncDrillData?.title ?? ''}
+        onExportCsv={() => {
+          if (!ncDrillData) return;
+          exportToCsv(
+            ncDrillData.items,
+            [
+              { key: 'Id', header: 'ID' },
+              { key: 'Non Conformance Title', header: 'Title' },
+              { key: 'Classification', header: 'Classification' },
+              { key: 'Case Worker', header: 'Case Worker' },
+              { key: 'Registration Time', header: 'Registration Time' },
+              { key: 'Completed On', header: 'Completed On' },
+              { key: 'Status', header: 'Status' },
+              { key: 'Reoccurrence', header: 'Reoccurrence' },
+            ],
+            `nc-drill-${ncDrillData.title.replace(/\s+/g, '-').toLowerCase()}.csv`
+          );
+        }}
+      >
+        <SummaryBar metrics={(() => {
+          const items = ncDrillData?.items ?? [];
+          const metrics: { label: string; value: string | number; color?: 'default' | 'success' | 'warning' | 'danger' }[] = [
+            { label: 'Total NCs', value: items.length },
+          ];
+          const lowRisk = items.filter((r: any) => r.Classification === 'Low risk').length;
+          const highRisk = items.filter((r: any) => r.Classification === 'High risk').length;
+          const reoccurring = items.filter((r: any) => r.Reoccurrence === 'YES').length;
+          if (lowRisk > 0) metrics.push({ label: 'Low Risk', value: lowRisk, color: 'success' });
+          if (highRisk > 0) metrics.push({ label: 'High Risk', value: highRisk, color: 'danger' });
+          if (reoccurring > 0) metrics.push({ label: 'Reoccurring', value: reoccurring, color: 'warning' });
+          const overdue = items.filter((r: any) => r.Status === 'Deadline Exceeded').length;
+          if (overdue > 0) metrics.push({ label: 'Overdue', value: overdue, color: 'danger' });
+          return metrics;
+        })()} />
+        <ExpandableDataTable
+          columns={[
+            { key: 'id', header: 'ID', sortable: true, cell: (row: any) => row['Id'] || '' },
+            { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[250px] truncate block">{row['Non Conformance Title'] || ''}</span> },
+            { key: 'classification', header: 'Risk', sortable: true, cell: (row: any) => {
+              const cls = row['Classification'];
+              return <Badge variant={cls === 'High risk' ? 'destructive' : cls === 'Low risk' ? 'secondary' : 'outline'}>{cls || 'Unclassified'}</Badge>;
+            }},
+            { key: 'worker', header: 'Case Worker', sortable: true, cell: (row: any) => row['Case Worker'] || 'N/A' },
+            { key: 'status', header: 'Status', sortable: true, cell: (row: any) => {
+              const s = row['Status'];
+              return <Badge variant={s === 'Deadline Exceeded' ? 'destructive' : s === 'Completed' ? 'secondary' : 'outline'}>{s || 'Unknown'}</Badge>;
+            }},
+            { key: 'reoccurrence', header: 'Reoccurrence', cell: (row: any) => {
+              const r = row['Reoccurrence']?.toUpperCase();
+              return r === 'YES' ? <Badge variant="destructive">YES</Badge> : <Badge variant="outline">{r || 'NO'}</Badge>;
+            }},
+            { key: 'regtime', header: 'Registered', cell: (row: any) => row['Registration Time'] || '' },
+          ]}
+          data={ncDrillData?.items ?? []}
+          getRowId={(row: any) => String(row['Id'] || Math.random())}
+          expandedContent={(row: any) => (
+            <div className="space-y-3 text-sm">
+              {row['Impact Assessment'] && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Impact Assessment</p>
+                  <p>{row['Impact Assessment'].length > 300 ? row['Impact Assessment'].slice(0, 300) + '...' : row['Impact Assessment']}</p>
+                </div>
+              )}
+              {row['Investigation summary'] && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Investigation Summary</p>
+                  <p>{row['Investigation summary'].length > 300 ? row['Investigation summary'].slice(0, 300) + '...' : row['Investigation summary']}</p>
+                </div>
+              )}
+              {row['Root cause description'] && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Root Cause</p>
+                  <p>{row['Root cause description'].length > 300 ? row['Root cause description'].slice(0, 300) + '...' : row['Root cause description']}</p>
+                </div>
+              )}
+              {!row['Impact Assessment'] && !row['Investigation summary'] && !row['Root cause description'] && (
+                <p className="text-muted-foreground italic">No additional details available for this NC.</p>
+              )}
+            </div>
+          )}
+          getRowClassName={(row: any) => row['Status'] === 'Deadline Exceeded' ? 'bg-destructive/5' : row['Classification'] === 'High risk' ? 'bg-amber-500/5' : ''}
+        />
+      </DrillDownSheet>
+
+      {/* Documents in Flow Drill-Down Sheet */}
+      <DrillDownSheet
+        open={!!docFlowDrillData}
+        onOpenChange={(open) => !open && setDocFlowDrillData(null)}
+        title={docFlowDrillData?.title ?? ''}
+        onExportCsv={() => {
+          if (!docFlowDrillData) return;
+          exportToCsv(
+            docFlowDrillData.items,
+            [
+              { key: 'Doc Prefix', header: 'Prefix' },
+              { key: 'Doc Number', header: 'Number' },
+              { key: 'Title', header: 'Title' },
+              { key: 'Document Flow', header: 'Flow Type' },
+              { key: 'Pending Steps', header: 'Pending Steps' },
+              { key: 'Author', header: 'Author' },
+              { key: 'Responsible', header: 'Responsible' },
+            ],
+            `docs-in-flow-${new Date().toISOString().slice(0, 10)}.csv`
+          );
+        }}
+      >
+        <SummaryBar metrics={(() => {
+          const items = docFlowDrillData?.items ?? [];
+          const major = items.filter((d: any) => (d['Document Flow'] || '').toLowerCase().includes('major')).length;
+          const minor = items.filter((d: any) => (d['Document Flow'] || '').toLowerCase().includes('minor')).length;
+          const metrics: { label: string; value: string | number; color?: 'default' | 'success' | 'warning' | 'danger' }[] = [
+            { label: 'Documents', value: items.length },
+          ];
+          if (major > 0) metrics.push({ label: 'Major Revisions', value: major, color: 'warning' });
+          if (minor > 0) metrics.push({ label: 'Minor Revisions', value: minor, color: 'success' });
+          return metrics;
+        })()} />
+        <ExpandableDataTable
+          columns={[
+            { key: 'docId', header: 'Document', sortable: true, cell: (row: any) => `${row['Doc Prefix'] || ''}${row['Doc Number'] || ''}` },
+            { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[250px] truncate block">{row['Title'] || ''}</span> },
+            { key: 'flow', header: 'Flow Type', sortable: true, cell: (row: any) => {
+              const flow = (row['Document Flow'] || '').toLowerCase();
+              if (flow.includes('major')) return <Badge variant="destructive">Major Revision</Badge>;
+              if (flow.includes('minor')) return <Badge variant="secondary">Minor Revision</Badge>;
+              if (flow.includes('create') || flow.includes('new')) return <Badge className="bg-blue-500 hover:bg-blue-600 text-white border-transparent">New Document</Badge>;
+              return <Badge variant="outline">{row['Document Flow'] || 'Other'}</Badge>;
+            }},
+            { key: 'pending', header: 'Pending Step', cell: (row: any) => row['Pending Steps'] || '' },
+            { key: 'author', header: 'Author', sortable: true, cell: (row: any) => row['Author'] || '' },
+            { key: 'responsible', header: 'Responsible', cell: (row: any) => row['Responsible'] || '' },
+          ]}
+          data={docFlowDrillData?.items ?? []}
+          getRowId={(row: any) => String(`${row['Doc Prefix']}${row['Doc Number']}` || Math.random())}
+          expandedContent={(row: any) => (
+            <div className="space-y-2 text-sm">
+              {row['Change Reason'] && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Change Reason</p>
+                  <p>{row['Change Reason']}</p>
+                </div>
+              )}
+              <div className="flex gap-4 text-xs text-muted-foreground">
+                {row['Version'] && <span>Version: {row['Version']}</span>}
+                {row['Version Date'] && <span>Version Date: {row['Version Date']}</span>}
+                {row['Authorized copy'] && <span>Authorized Copy: {row['Authorized copy']}</span>}
+              </div>
+            </div>
+          )}
         />
       </DrillDownSheet>
 
