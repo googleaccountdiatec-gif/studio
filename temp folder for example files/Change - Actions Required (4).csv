@@ -1,4 +1,16 @@
 ﻿Change_ActionID;Action required prior to change;Responsible;Pending Steps;Deadline;Change Title;Change ID (CMID);Approve;Registration Time;Completed On
+669;"Training of production team in temporary change";Nina Granum;;10/04/2026;"Extending shelf life for RPMI1640, from 12 to 21 months";125;Approved;31/03/2026 01:46 PM;08/04/2026 01:57 PM
+668;"Inform the production team when the change is completed and normal procedure for medium preparation are resumed.";Nina Granum;"Perform Change Action";30/09/2026;"Extending shelf life for RPMI1640, from 12 to 21 months";125;Approved;31/03/2026 01:14 PM;
+667;"Inform all operators of new exp. date and temporary change in procedure for preparing medium for production";Nina Granum;;08/04/2026;"Extending shelf life for RPMI1640, from 12 to 21 months";125;Approved;29/03/2026 06:27 PM;08/04/2026 01:58 PM
+666;"Create calculator that calculates how much glutamine should be added to RPMI1640, share wiht production team";Gudrun Richstad;;08/04/2026;"Extending shelf life for RPMI1640, from 12 to 21 months";125;Approved;29/03/2026 06:26 PM;08/04/2026 02:00 PM
+665;"Create pre-printed labels with new exp. date for lot 3134836";Nina Granum;;08/04/2026;"Extending shelf life for RPMI1640, from 12 to 21 months";125;Approved;29/03/2026 06:24 PM;08/04/2026 02:01 PM
+664;"Run a successfull test run on the HF Primer system";Nina Granum;"Perform Change Action";30/06/2026;"Implementation of HF primer bioreactor";124;Approved;27/03/2026 02:34 PM;
+663;"Train relevant operators in HF primer process";Nina Granum;"Perform Change Action";30/05/2026;"Implementation of HF primer bioreactor";124;Approved;27/03/2026 02:33 PM;
+662;"Create new training module for HF primer process";Gudrun Richstad;"Review";30/04/2026;"Implementation of HF primer bioreactor";124;Approved;27/03/2026 02:32 PM;
+661;"Ensure Curida Diatec has 2 pumps with double pump head, including ordering a new double pump head if needed";Jim Eero Lamppu;"Perform Change Action";17/04/2026;"Implementation of HF primer bioreactor";124;Approved;27/03/2026 02:31 PM;
+660;"Verify pump speed is correct with double pump head";Jim Eero Lamppu;"Perform Change Action";16/04/2026;"Implementation of HF primer bioreactor";124;Approved;27/03/2026 02:29 PM;
+659;"Create SOP and Worksheet for HF Primer process";Nina Granum;"Perform Change Action";10/04/2026;"Implementation of HF primer bioreactor";124;Approved;27/03/2026 02:28 PM;
+658;"Purchase HF primer and Rack from cell culture company";Hans Petter Johansen;"Perform Change Action";10/04/2026;"Implementation of HF primer bioreactor";124;Approved;27/03/2026 02:27 PM;
 657;"Draft and distribute a user-guide highlighting the new UI changes and impacts to the end-user experience";Joakim Sørgård;"Perform Change Action";15/04/2026;"Software update for BizzMine from v6.0.38.3 to v6.0.44.4";123;Approved;09/03/2026 02:58 PM;
 656;"Evaluate validation and qualification testing on core QMS workflows based on vendor-provided validation documentation";Joakim Sørgård;"Perform Change Action";31/03/2026;"Software update for BizzMine from v6.0.38.3 to v6.0.44.4";123;Approved;09/03/2026 02:57 PM;
 655;"Deploy v6.044.4 mirror/sandbox environment";Joakim Sørgård;"Perform Change Action";31/03/2026;"Software update for BizzMine from v6.0.38.3 to v6.0.44.4";123;Approved;09/03/2026 02:56 PM;
@@ -38,7 +50,7 @@
 614;"Update SOP 4019 and DOC 4019.1 according to the new water purification system.";Jim Eero Lamppu;;16/01/2026;"Implementation of ​Milli-Q® IX 7005 purification system + 100 l tank ref WO-03099346";110;Approved;24/11/2025 03:55 PM;13/01/2026 10:57 AM
 613;"Perform an instrument implementation for Milli-Q IX 7005 and associated components in Bizzmine";Jim Eero Lamppu;;23/01/2026;"Implementation of ​Milli-Q® IX 7005 purification system + 100 l tank ref WO-03099346";110;Approved;24/11/2025 03:52 PM;19/12/2025 09:46 AM
 612;"Perform IQ and OQ for Milli-Q IX 7005 water purification system";Jim Eero Lamppu;;23/01/2026;"Implementation of ​Milli-Q® IX 7005 purification system + 100 l tank ref WO-03099346";110;Approved;24/11/2025 03:51 PM;19/12/2025 09:45 AM
-653;"Update SOP 5042 and WIN 5042_2";Christer Fjeld;"Perform Change Action";06/03/2026;"Ease the workflow for minor revisions";109;Approved;02/03/2026 09:25 AM;
+653;"Update SOP 5042 and WIN 5042_2";Christer Fjeld;"Review";06/03/2026;"Ease the workflow for minor revisions";109;Approved;02/03/2026 09:25 AM;
 611;"Create workflow for minor revisions in BizzMine";Joakim Sørgård;"Perform Change Action";24/02/2026;"Ease the workflow for minor revisions";109;Approved;04/11/2025 11:00 AM;
 610;"Validate the new BizzMine workflow for updating document templates";Kawmadi Vithana;"Perform Change Action";31/03/2026;"Create a workflow for updating document templates";108;Approved;31/10/2025 09:06 AM;
 609;"Design a new BizzMine workflow for the "1-Document Control Templates" collection.";;"Complete & Approve";31/03/2026;"Create a workflow for updating document templates";108;;31/10/2025 09:04 AM;

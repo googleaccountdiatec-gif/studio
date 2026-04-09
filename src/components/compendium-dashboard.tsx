@@ -51,6 +51,7 @@ export default function CompendiumDashboard() {
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('auto-2-weeks');
   const [isSaving, setIsSaving] = useState(false);
   const [drillThroughData, setDrillThroughData] = useState<{ title: string; items: any[]; category: string } | null>(null);
+  const [ncYearRange, setNcYearRange] = useState<string>('current-prev');
   const { toast } = useToast();
   const productionTeam = getProductionTeam();
 
@@ -82,10 +83,30 @@ export default function CompendiumDashboard() {
   }, [snapshots]);
 
   // --- Non-Conformance Chart Logic ---
-  const ncChartData = useMemo(() => {
+  const ncAvailableYears = useMemo(() => {
+    const yearsSet = new Set<number>();
+    nonConformanceData.forEach(item => {
+      const date = parseDate(item["Registration Time"]);
+      if (isValid(date)) yearsSet.add(date.getFullYear());
+    });
     const currentYear = new Date().getFullYear();
-    const previousYear = currentYear - 1;
-    const years = [previousYear, currentYear];
+    yearsSet.add(currentYear);
+    return [...yearsSet].sort((a, b) => b - a);
+  }, [nonConformanceData]);
+
+  const ncSelectedYears = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    if (ncYearRange === 'current-prev') return [currentYear - 1, currentYear];
+    if (ncYearRange === 'last-3') return [currentYear - 2, currentYear - 1, currentYear];
+    if (ncYearRange === 'all') return ncAvailableYears;
+    // Individual year
+    const parsed = parseInt(ncYearRange);
+    if (!isNaN(parsed)) return [parsed];
+    return [currentYear - 1, currentYear];
+  }, [ncYearRange, ncAvailableYears]);
+
+  const ncChartData = useMemo(() => {
+    const years = [...ncSelectedYears].sort((a, b) => a - b);
     const quarters = [1, 2, 3, 4];
 
     const aggregated: { [key: string]: { lowRisk: number; highRisk: number; total: number; reoccurring: number } } = {};
@@ -108,7 +129,7 @@ export default function CompendiumDashboard() {
 
       const date = parseDate(item["Registration Time"]);
       if (!isValid(date)) return;
-      
+
       const year = date.getFullYear();
       if (!years.includes(year)) return;
 
@@ -124,7 +145,7 @@ export default function CompendiumDashboard() {
     });
 
     return Object.entries(aggregated).map(([key, value]) => ({ name: key, ...value }));
-  }, [nonConformanceData, teamFilter, productionTeam]);
+  }, [nonConformanceData, teamFilter, productionTeam, ncSelectedYears]);
 
 
   // --- Helper: Calculate Overdue Counts ---
@@ -321,7 +342,22 @@ export default function CompendiumDashboard() {
       {/* Top Section */}
       <div className="grid gap-6 lg:grid-cols-2">
         <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">NC Risk & Volume (Current & Prev. Year)</h3>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">NC Risk & Volume</h3>
+                <Select value={ncYearRange} onValueChange={setNcYearRange}>
+                    <SelectTrigger className="h-7 w-[180px] text-xs">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                        <SelectItem value="current-prev">Current & Prev. Year</SelectItem>
+                        <SelectItem value="last-3">Last 3 Years</SelectItem>
+                        <SelectItem value="all">All Years</SelectItem>
+                        {ncAvailableYears.map(year => (
+                            <SelectItem key={year} value={String(year)}>{year} Only</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
             <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={ncChartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -337,7 +373,22 @@ export default function CompendiumDashboard() {
         </GlassCard>
 
         <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">NC Reoccurrence Trend (Current & Prev. Year)</h3>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">NC Reoccurrence Trend</h3>
+                <Select value={ncYearRange} onValueChange={setNcYearRange}>
+                    <SelectTrigger className="h-7 w-[180px] text-xs">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                        <SelectItem value="current-prev">Current & Prev. Year</SelectItem>
+                        <SelectItem value="last-3">Last 3 Years</SelectItem>
+                        <SelectItem value="all">All Years</SelectItem>
+                        {ncAvailableYears.map(year => (
+                            <SelectItem key={year} value={String(year)}>{year} Only</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
             <ResponsiveContainer width="100%" height={250}>
                  <LineChart data={ncChartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
