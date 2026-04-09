@@ -51,6 +51,7 @@ export default function CompendiumDashboard() {
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('auto-2-weeks');
   const [isSaving, setIsSaving] = useState(false);
   const [drillThroughData, setDrillThroughData] = useState<{ title: string; items: any[]; category: string } | null>(null);
+  const [caDrillChangeId, setCaDrillChangeId] = useState<string | null>(null);
   const [ncDrillData, setNcDrillData] = useState<{ title: string; items: any[]; filterType: 'all' | 'low' | 'high' | 'reoccurring' } | null>(null);
   const [docFlowDrillData, setDocFlowDrillData] = useState<{ title: string; items: any[] } | null>(null);
   const [ncYearRange, setNcYearRange] = useState<string>('current-prev');
@@ -645,99 +646,205 @@ export default function CompendiumDashboard() {
 
       <DrillDownSheet
         open={!!drillThroughData}
-        onOpenChange={(open) => !open && setDrillThroughData(null)}
-        title={drillThroughData?.title ?? ''}
+        onOpenChange={(open) => { if (!open) { setDrillThroughData(null); setCaDrillChangeId(null); } }}
+        title={(() => {
+          if (drillThroughData?.category === 'change-action' && caDrillChangeId) {
+            if (caDrillChangeId === '_unlinked') return 'Unlinked Change Actions';
+            const actions = drillThroughData.items.filter((d: any) => d['Change ID (CMID)'] === caDrillChangeId);
+            const changeTitle = actions[0]?.['Change Title'] || '';
+            return `CMID${caDrillChangeId}: ${changeTitle}`;
+          }
+          return drillThroughData?.title ?? '';
+        })()}
+        breadcrumbs={drillThroughData?.category === 'change-action' && caDrillChangeId ? [
+          { label: 'All Overdue Changes', onClick: () => setCaDrillChangeId(null) }
+        ] : []}
         onExportCsv={() => {
           if (!drillThroughData) return;
           const cat = drillThroughData.category;
+          const items = cat === 'change-action' && caDrillChangeId
+            ? (caDrillChangeId === '_unlinked'
+              ? drillThroughData.items.filter((d: any) => !d['Change ID (CMID)'])
+              : drillThroughData.items.filter((d: any) => d['Change ID (CMID)'] === caDrillChangeId))
+            : drillThroughData.items;
           const cols = cat === 'capa'
             ? [{ key: 'CAPA ID', header: 'ID' }, { key: 'Title', header: 'Title' }, { key: 'Priority', header: 'Priority' }, { key: 'Assigned To', header: 'Assigned To' }, { key: 'Pending Steps', header: 'Phase' }]
             : cat === 'nc'
             ? [{ key: 'Id', header: 'ID' }, { key: 'Non Conformance Title', header: 'Title' }, { key: 'Classification', header: 'Classification' }, { key: 'Case Worker', header: 'Case Worker' }, { key: 'Status', header: 'Status' }]
             : cat === 'change-action'
-            ? [{ key: 'Change_ActionID', header: 'ID' }, { key: 'Title', header: 'Title' }, { key: 'Responsible', header: 'Responsible' }, { key: 'Deadline', header: 'Deadline' }, { key: 'Approve', header: 'Approval' }]
+            ? [{ key: 'Change_ActionID', header: 'Action ID' }, { key: 'Action required prior to change', header: 'Action Required' }, { key: 'Change Title', header: 'Change' }, { key: 'Change ID (CMID)', header: 'CMID' }, { key: 'Responsible', header: 'Responsible' }, { key: 'Deadline', header: 'Deadline' }, { key: 'Approve', header: 'Approval' }]
             : [{ key: 'Record training ID', header: 'ID' }, { key: 'Title', header: 'Title' }, { key: 'Trainee', header: 'Trainee' }, { key: 'Deadline for completing training', header: 'Deadline' }, { key: 'Training category', header: 'Category' }];
-          exportToCsv(drillThroughData.items, cols, `overdue-${cat}_${new Date().toISOString().slice(0, 10)}.csv`);
+          exportToCsv(items, cols, `overdue-${cat}_${new Date().toISOString().slice(0, 10)}.csv`);
         }}
       >
-        <SummaryBar metrics={(() => {
-          const items = drillThroughData?.items ?? [];
-          const cat = drillThroughData?.category;
-          const base = [{ label: 'Overdue Items', value: items.length, color: 'danger' as const }];
-          if (cat === 'capa') {
-            const highPrio = items.filter((r: any) => r['Priority']?.toLowerCase() === 'high').length;
-            if (highPrio > 0) base.push({ label: 'High Priority', value: highPrio, color: 'danger' as const });
-          } else if (cat === 'nc') {
-            const highRisk = items.filter((r: any) => r['Classification'] === 'High risk').length;
-            if (highRisk > 0) base.push({ label: 'High Risk', value: highRisk, color: 'danger' as const });
-          }
-          return base;
-        })()} />
-        <ExpandableDataTable
-          columns={(() => {
-            const cat = drillThroughData?.category;
-            if (cat === 'capa') return [
-              { key: 'id', header: 'CAPA ID', cell: (row: any) => row['CAPA ID'] || '' },
-              { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[200px] truncate block">{row['Title'] || ''}</span> },
-              { key: 'priority', header: 'Priority', cell: (row: any) => {
-                const p = row['Priority']?.toLowerCase();
-                return <Badge variant={p === 'high' ? 'destructive' : 'secondary'}>{row['Priority'] || 'N/A'}</Badge>;
-              }},
-              { key: 'assignee', header: 'Assigned To', cell: (row: any) => row['Assigned To'] || '' },
-              { key: 'phase', header: 'Phase', cell: (row: any) => {
-                const steps = (row['Pending Steps'] || '').toLowerCase();
-                return <Badge variant="outline">{steps.includes('effectiveness') ? 'Effectiveness' : 'Execution'}</Badge>;
-              }},
-              { key: 'deadline', header: 'Deadline', cell: (row: any) => {
-                const steps = (row['Pending Steps'] || '').toLowerCase();
-                return steps.includes('effectiveness')
-                  ? (row['Deadline for effectiveness check'] || row['Due Date'] || '')
-                  : (row['Due Date'] || '');
-              }},
-            ];
-            if (cat === 'nc') return [
-              { key: 'id', header: 'NC ID', cell: (row: any) => row['Id'] || '' },
-              { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[200px] truncate block">{row['Non Conformance Title'] || row['Title'] || ''}</span> },
-              { key: 'classification', header: 'Risk', cell: (row: any) => {
-                const cls = row['Classification'];
-                return <Badge variant={cls === 'High risk' ? 'destructive' : 'secondary'}>{cls || 'Unknown'}</Badge>;
-              }},
-              { key: 'worker', header: 'Case Worker', cell: (row: any) => row['Case Worker'] || '' },
-              { key: 'reoccurrence', header: 'Reoccurrence', cell: (row: any) => {
-                const r = row['Reoccurrence']?.toUpperCase();
-                return <Badge variant={r === 'YES' ? 'destructive' : 'outline'}>{r || 'NO'}</Badge>;
-              }},
-              { key: 'status', header: 'Status', cell: (row: any) => <Badge variant="destructive">{row['Status'] || ''}</Badge> },
-            ];
-            if (cat === 'change-action') return [
-              { key: 'id', header: 'Action ID', cell: (row: any) => row['Change_ActionID'] || '' },
-              { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[200px] truncate block">{row['Title'] || ''}</span> },
-              { key: 'responsible', header: 'Responsible', cell: (row: any) => row['Responsible'] || '' },
-              { key: 'deadline', header: 'Deadline', cell: (row: any) => row['Deadline'] || '' },
-              { key: 'approval', header: 'Approval', cell: (row: any) => {
-                const a = row['Approve']?.trim().toLowerCase();
-                if (a === 'approved') return <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent">Approved</Badge>;
-                if (a) return <Badge variant="secondary">{row['Approve']}</Badge>;
-                return <Badge variant="outline">Pending</Badge>;
-              }},
-            ];
-            // training
-            return [
-              { key: 'id', header: 'Training ID', cell: (row: any) => row['Record training ID'] || '' },
-              { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[200px] truncate block">{row['Title'] || ''}</span> },
-              { key: 'trainee', header: 'Trainee', cell: (row: any) => row['Trainee'] || '' },
-              { key: 'category', header: 'Category', cell: (row: any) => row['Training category'] || '' },
-              { key: 'deadline', header: 'Deadline', cell: (row: any) => row['Deadline for completing training'] || '' },
-              { key: 'approval', header: 'Approval', cell: (row: any) => {
-                const a = row['Final training approval']?.trim();
-                if (a) return <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent">{a}</Badge>;
-                return <Badge variant="outline">Pending</Badge>;
-              }},
-            ];
-          })()}
-          data={drillThroughData?.items ?? []}
-          getRowId={(row: any) => String(row['CAPA ID'] || row['Id'] || row['Change_ActionID'] || row['Record training ID'] || Math.random())}
-        />
+        {/* Change Action: Level 1 — Grouped by Change */}
+        {drillThroughData?.category === 'change-action' && !caDrillChangeId && (() => {
+          const items = drillThroughData.items;
+          const changeMap: Record<string, { cmid: string; title: string; actions: any[] }> = {};
+          items.forEach((d: any) => {
+            const rawCmid = d['Change ID (CMID)']?.trim();
+            const cmid = rawCmid || '_unlinked';
+            if (!changeMap[cmid]) changeMap[cmid] = { cmid, title: rawCmid ? (d['Change Title'] || 'Untitled Change') : 'Unlinked Actions (no CMID)', actions: [] };
+            changeMap[cmid].actions.push(d);
+          });
+          const changes = Object.values(changeMap).sort((a, b) => {
+            if (a.cmid === '_unlinked') return 1;
+            if (b.cmid === '_unlinked') return -1;
+            return b.actions.length - a.actions.length;
+          });
+          const uniqueResponsible = new Set(items.map((d: any) => d['Responsible']).filter(Boolean));
+          return (
+            <>
+              <SummaryBar metrics={[
+                { label: 'Overdue Actions', value: items.length, color: 'danger' as const },
+                { label: 'Across Changes', value: changes.filter(c => c.cmid !== '_unlinked').length },
+                { label: 'Responsible People', value: uniqueResponsible.size },
+              ]} />
+              <ExpandableDataTable
+                columns={[
+                  { key: 'cmid', header: 'Change', sortable: true, cell: (row: any) => (
+                    row.cmid === '_unlinked'
+                      ? <span className="text-muted-foreground italic">No CMID</span>
+                      : <span className="font-mono font-medium">CMID{row.cmid}</span>
+                  )},
+                  { key: 'title', header: 'Change Title', cell: (row: any) => <span className="max-w-[250px] truncate block">{row.title}</span> },
+                  { key: 'count', header: 'Overdue', sortable: true, cell: (row: any) => <Badge variant="destructive">{row.actions.length}</Badge> },
+                  { key: 'responsible', header: 'Responsible', cell: (row: any) => {
+                    const people = [...new Set(row.actions.map((a: any) => a['Responsible']).filter(Boolean))];
+                    return people.length > 0
+                      ? <span className="text-sm">{people.join(', ')}</span>
+                      : <span className="text-sm text-muted-foreground">Unassigned</span>;
+                  }},
+                ]}
+                data={changes}
+                getRowId={(row: any) => row.cmid}
+                onRowClick={(row: any) => setCaDrillChangeId(row.cmid)}
+              />
+            </>
+          );
+        })()}
+
+        {/* Change Action: Level 2 — Individual actions within a change */}
+        {drillThroughData?.category === 'change-action' && caDrillChangeId && (() => {
+          const actions = caDrillChangeId === '_unlinked'
+            ? drillThroughData.items.filter((d: any) => !d['Change ID (CMID)']?.trim())
+            : drillThroughData.items.filter((d: any) => d['Change ID (CMID)'] === caDrillChangeId);
+          const approved = actions.filter((d: any) => d['Approve']?.trim().toLowerCase() === 'approved').length;
+          return (
+            <>
+              <SummaryBar metrics={[
+                { label: 'Overdue Actions', value: actions.length, color: 'danger' as const },
+                { label: 'Approved', value: approved, color: 'success' as const },
+              ]} />
+              <ExpandableDataTable
+                columns={[
+                  { key: 'id', header: 'ID', sortable: true, cell: (row: any) => <span className="font-mono">{row['Change_ActionID'] || ''}</span> },
+                  { key: 'action', header: 'Action Required', cell: (row: any) => {
+                    const text = row['Action required prior to change'] || '';
+                    return <span className="max-w-[250px] truncate block">{text.length > 60 ? text.slice(0, 60) + '...' : text}</span>;
+                  }},
+                  { key: 'responsible', header: 'Responsible', sortable: true, cell: (row: any) => row['Responsible'] || <span className="text-muted-foreground">Unassigned</span> },
+                  { key: 'deadline', header: 'Deadline', sortable: true, cell: (row: any) => row['Deadline'] || '' },
+                ]}
+                data={actions}
+                getRowId={(row: any) => String(row['Change_ActionID'] || Math.random())}
+                expandedContent={(row: any) => (
+                  <div className="text-sm space-y-2">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Full Action Description</p>
+                      <p>{row['Action required prior to change'] || 'No description'}</p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {row['Pending Steps'] && <Badge variant="outline">{row['Pending Steps']}</Badge>}
+                      {(() => {
+                        const a = row['Approve']?.trim().toLowerCase();
+                        if (a === 'approved') return <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent">Approved</Badge>;
+                        if (a) return <Badge variant="secondary">{row['Approve']}</Badge>;
+                        return null;
+                      })()}
+                    </div>
+                    <div className="flex gap-4 text-xs text-muted-foreground">
+                      {row['Registration Time'] && <span>Registered: {row['Registration Time']}</span>}
+                      {row['Completed On'] && <span>Completed: {row['Completed On']}</span>}
+                    </div>
+                  </div>
+                )}
+              />
+            </>
+          );
+        })()}
+
+        {/* Non-change-action categories: CAPA, NC, Training */}
+        {drillThroughData && drillThroughData.category !== 'change-action' && (
+          <>
+            <SummaryBar metrics={(() => {
+              const items = drillThroughData.items;
+              const cat = drillThroughData.category;
+              const base: { label: string; value: string | number; color?: 'default' | 'success' | 'warning' | 'danger' }[] = [{ label: 'Overdue Items', value: items.length, color: 'danger' }];
+              if (cat === 'capa') {
+                const highPrio = items.filter((r: any) => r['Priority']?.toLowerCase() === 'high').length;
+                if (highPrio > 0) base.push({ label: 'High Priority', value: highPrio, color: 'danger' });
+              } else if (cat === 'nc') {
+                const highRisk = items.filter((r: any) => r['Classification'] === 'High risk').length;
+                if (highRisk > 0) base.push({ label: 'High Risk', value: highRisk, color: 'danger' });
+              }
+              return base;
+            })()} />
+            <ExpandableDataTable
+              columns={(() => {
+                const cat = drillThroughData.category;
+                if (cat === 'capa') return [
+                  { key: 'id', header: 'CAPA ID', cell: (row: any) => row['CAPA ID'] || '' },
+                  { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[200px] truncate block">{row['Title'] || ''}</span> },
+                  { key: 'priority', header: 'Priority', cell: (row: any) => {
+                    const p = row['Priority']?.toLowerCase();
+                    return <Badge variant={p === 'high' ? 'destructive' : 'secondary'}>{row['Priority'] || 'N/A'}</Badge>;
+                  }},
+                  { key: 'assignee', header: 'Assigned To', cell: (row: any) => row['Assigned To'] || '' },
+                  { key: 'phase', header: 'Phase', cell: (row: any) => {
+                    const steps = (row['Pending Steps'] || '').toLowerCase();
+                    return <Badge variant="outline">{steps.includes('effectiveness') ? 'Effectiveness' : 'Execution'}</Badge>;
+                  }},
+                  { key: 'deadline', header: 'Deadline', cell: (row: any) => {
+                    const steps = (row['Pending Steps'] || '').toLowerCase();
+                    return steps.includes('effectiveness')
+                      ? (row['Deadline for effectiveness check'] || row['Due Date'] || '')
+                      : (row['Due Date'] || '');
+                  }},
+                ];
+                if (cat === 'nc') return [
+                  { key: 'id', header: 'NC ID', cell: (row: any) => row['Id'] || '' },
+                  { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[200px] truncate block">{row['Non Conformance Title'] || row['Title'] || ''}</span> },
+                  { key: 'classification', header: 'Risk', cell: (row: any) => {
+                    const cls = row['Classification'];
+                    return <Badge variant={cls === 'High risk' ? 'destructive' : 'secondary'}>{cls || 'Unknown'}</Badge>;
+                  }},
+                  { key: 'worker', header: 'Case Worker', cell: (row: any) => row['Case Worker'] || '' },
+                  { key: 'reoccurrence', header: 'Reoccurrence', cell: (row: any) => {
+                    const r = row['Reoccurrence']?.toUpperCase();
+                    return <Badge variant={r === 'YES' ? 'destructive' : 'outline'}>{r || 'NO'}</Badge>;
+                  }},
+                  { key: 'status', header: 'Status', cell: (row: any) => <Badge variant="destructive">{row['Status'] || ''}</Badge> },
+                ];
+                // training
+                return [
+                  { key: 'id', header: 'Training ID', cell: (row: any) => row['Record training ID'] || '' },
+                  { key: 'title', header: 'Title', cell: (row: any) => <span className="max-w-[200px] truncate block">{row['Title'] || ''}</span> },
+                  { key: 'trainee', header: 'Trainee', cell: (row: any) => row['Trainee'] || '' },
+                  { key: 'category', header: 'Category', cell: (row: any) => row['Training category'] || '' },
+                  { key: 'deadline', header: 'Deadline', cell: (row: any) => row['Deadline for completing training'] || '' },
+                  { key: 'approval', header: 'Approval', cell: (row: any) => {
+                    const a = row['Final training approval']?.trim();
+                    if (a) return <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent">{a}</Badge>;
+                    return <Badge variant="outline">Pending</Badge>;
+                  }},
+                ];
+              })()}
+              data={drillThroughData.items}
+              getRowId={(row: any) => String(row['CAPA ID'] || row['Id'] || row['Record training ID'] || Math.random())}
+            />
+          </>
+        )}
       </DrillDownSheet>
 
       {/* NC Chart Drill-Down Sheet */}

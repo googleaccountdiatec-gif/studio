@@ -104,64 +104,45 @@ export default function CapaDashboard() {
     return { overdueCount, totalCount, onTimePercentage };
   }, [filteredData]);
 
-  // NEW: Logic for "Change since last bi-weekly"
+  // Bi-weekly trend: compare overdue count now vs 2 weeks ago
+  // Uses Completed On date (not Pending Steps) to align with compendium's isTaskOverdue logic
   const biWeeklyTrend = useMemo(() => {
     const today = startOfDay(new Date());
     const twoWeeksAgo = subDays(today, 14);
 
-    let newOverdue = 0; // The +1s
-    let resolvedOverdue = 0; // The -1s
+    let overdueNow = 0;
+    let overdueTwoWeeksAgo = 0;
 
-    // We use the full dataset (respecting team filter) to catch items that might have been completed
-    // and thus filtered out of the main view if 'Show Completed' is off, but we still need them for the calculation.
     let trendData = capaData;
-
     if (teamFilter === 'production') {
         trendData = trendData.filter(item => productionTeam.includes(item['Assigned To']));
     }
 
     trendData.forEach(item => {
-        const pending = item['Pending Steps'] ? item['Pending Steps'].trim().toLowerCase() : '';
-        const isCompleted = pending === '';
+        const pending = (item['Pending Steps'] || '').trim().toLowerCase();
         const isEffPhase = pending.includes('effectiveness');
-        const isExecPhase = !isCompleted && !isEffPhase;
 
-        const execDate = parseDate(item['Due Date']);
-        const effDate = parseDate(item['Deadline for effectiveness check']);
+        const effectiveDeadline = isEffPhase
+          ? parseDate(item['Deadline for effectiveness check'] || item['Due Date'])
+          : parseDate(item['Due Date']);
+        const completedOn = parseDate(item['Completed On']);
 
-        // --- EXECUTION PHASE LOGIC ---
-        if (isValid(execDate)) {
-            // +1: Became overdue in Exec in the last 14 days
-            // Must still be in Exec phase to count as "Overdue in Exec"
-            if (isExecPhase && execDate >= twoWeeksAgo && execDate < today) {
-                newOverdue++;
-            }
+        if (!isValid(effectiveDeadline)) return;
 
-            // -1: Was overdue in Exec 14 days ago, but is now moved to Eff or Completed
-            if (execDate < twoWeeksAgo) {
-                 if (isEffPhase || isCompleted) {
-                    resolvedOverdue++;
-                 }
-            }
+        // Overdue NOW: deadline is past AND not completed before now
+        if (effectiveDeadline < today) {
+            const completedBeforeNow = isValid(completedOn) && completedOn <= today;
+            if (!completedBeforeNow) overdueNow++;
         }
 
-        // --- EFFECTIVENESS PHASE LOGIC ---
-        if (isValid(effDate)) {
-            // +1: Became overdue in Eff in the last 14 days
-            if (isEffPhase && effDate >= twoWeeksAgo && effDate < today) {
-                newOverdue++;
-            }
-
-            // -1: Was overdue in Eff 14 days ago, but is now Completed
-            if (effDate < twoWeeksAgo) {
-                if (isCompleted) {
-                    resolvedOverdue++;
-                }
-            }
+        // Overdue 2 WEEKS AGO: deadline was past AND not completed before then
+        if (effectiveDeadline < twoWeeksAgo) {
+            const completedBeforeThen = isValid(completedOn) && completedOn <= twoWeeksAgo;
+            if (!completedBeforeThen) overdueTwoWeeksAgo++;
         }
     });
 
-    return newOverdue - resolvedOverdue;
+    return overdueNow - overdueTwoWeeksAgo;
   }, [capaData, teamFilter, productionTeam]);
 
   const chartDataByStatus = useMemo(() => {
@@ -316,7 +297,7 @@ export default function CapaDashboard() {
                 trend={biWeeklyTrend}
                 trendLabel="since last bi-weekly"
             />
-            <KpiCard title="On Time Rate" value={`${kpiValues.onTimePercentage}%`} icon={CheckCircle} description="CAPAs completed on schedule" />
+            <KpiCard title="On Time Rate" value={`${kpiValues.onTimePercentage}%`} icon={CheckCircle} description="CAPAs not past deadline" />
             <KpiCard title="Unique Assignees" value={Object.keys(chartDataByAssignee.reduce((acc, item) => { if(item.name) acc[item.name] = true; return acc; }, {} as Record<string, boolean>)).length} icon={Users} description="People with assigned CAPAs"/>
         </div>
 

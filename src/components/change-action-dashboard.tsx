@@ -3,10 +3,11 @@
 import React, { useState, useMemo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileUp, AlertTriangle, ListTodo, ArrowUpIcon, ArrowDownIcon, CheckCircle, ShieldCheck } from 'lucide-react';
+import { FileUp, AlertTriangle, ListTodo, CheckCircle, ShieldCheck } from 'lucide-react';
 import { format, isAfter, isValid, startOfDay, startOfMonth, subDays } from 'date-fns';
 import { parseDate } from '@/lib/date-utils';
 import { CapaChart } from './capa-chart';
+import { KpiCard } from './kpi-card';
 import { Skeleton } from './ui/skeleton';
 import { DataTable, DataTableColumn } from './data-table';
 import { Badge } from './ui/badge';
@@ -15,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useData } from '@/contexts/data-context';
-import { GlassCard } from '@/components/ui/glass-card';
+
 import { DrillDownSheet, SummaryBar, ExpandableDataTable, DetailSection, CrossLinkBadge } from '@/components/drill-down';
 import type { ExpandableColumn } from '@/components/drill-down';
 import { exportToCsv } from '@/lib/csv-export';
@@ -74,39 +75,51 @@ export default function ChangeActionDashboard() {
   const kpiValues = useMemo(() => {
     const totalCount = processedData.length;
     const overdueCount = processedData.filter(item => item.isOverdue).length;
-    return { totalCount, overdueCount };
+    const uniqueChanges = new Set(processedData.map(item => item['Change ID (CMID)']).filter(Boolean)).size;
+    const onTrackRate = totalCount > 0 ? ((totalCount - overdueCount) / totalCount * 100).toFixed(1) : '0.0';
+    return { totalCount, overdueCount, uniqueChanges, onTrackRate };
   }, [processedData]);
 
-  // NEW: Trend Logic
+  // Responsible person drill-down state
+  const [selectedResponsible, setSelectedResponsible] = useState<string | null>(null);
+
+  const responsibleDrillDownData = useMemo(() => {
+    if (!selectedResponsible) return [];
+    return processedData.filter(item => item['Responsible'] === selectedResponsible);
+  }, [processedData, selectedResponsible]);
+
+  // Bi-weekly trend: compare overdue count now vs 2 weeks ago
+  // Uses Completed On date (not Pending Steps) to align with compendium's isTaskOverdue logic
   const biWeeklyTrend = useMemo(() => {
     const today = startOfDay(new Date());
     const twoWeeksAgo = subDays(today, 14);
 
-    let newOverdue = 0;
-    let resolvedOverdue = 0;
+    let overdueNow = 0;
+    let overdueTwoWeeksAgo = 0;
 
     let trendData = allDataWithDates;
-
     if (teamFilter === 'production') {
         trendData = trendData.filter(item => productionTeam.includes(item['Responsible']));
     }
 
     trendData.forEach(item => {
-        const pending = item['Pending Steps'] ? item['Pending Steps'].trim() : '';
-        const isCompleted = pending === '';
+        if (!isValid(item.deadlineDate)) return;
+        const completedOn = parseDate(item['Completed On']);
 
-        // +1: Became overdue in last 14 days
-        if (isValid(item.deadlineDate) && !isCompleted && item.deadlineDate >= twoWeeksAgo && item.deadlineDate < today) {
-            newOverdue++;
+        // Overdue NOW: deadline is past AND not completed before now
+        if (item.deadlineDate < today) {
+            const completedBeforeNow = isValid(completedOn) && completedOn <= today;
+            if (!completedBeforeNow) overdueNow++;
         }
 
-        // -1: Was overdue 14 days ago, but is now Completed
-        if (isValid(item.deadlineDate) && item.deadlineDate < twoWeeksAgo && isCompleted) {
-             resolvedOverdue++;
+        // Overdue 2 WEEKS AGO: deadline was past AND not completed before then
+        if (item.deadlineDate < twoWeeksAgo) {
+            const completedBeforeThen = isValid(completedOn) && completedOn <= twoWeeksAgo;
+            if (!completedBeforeThen) overdueTwoWeeksAgo++;
         }
     });
 
-    return newOverdue - resolvedOverdue;
+    return overdueNow - overdueTwoWeeksAgo;
   }, [allDataWithDates, teamFilter, productionTeam]);
 
   const monthlyRegistrationData = useMemo(() => {
@@ -133,7 +146,7 @@ export default function ChangeActionDashboard() {
     });
 
     return Object.entries(changeIdCounts)
-      .map(([id, count]) => ({ name: id, total: count }))
+      .map(([id, count]) => ({ name: `CMID${id}`, total: count, rawId: id }))
       .sort((a, b) => b.total - a.total);
   }, [processedData]);
 
@@ -250,89 +263,64 @@ export default function ChangeActionDashboard() {
 
   const MainContent = () => (
     <div className="space-y-6">
-      {/* Consolidated KPI Card */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <GlassCard className="p-6 flex flex-col justify-center lg:col-span-1">
-            <h3 className="text-lg font-semibold mb-6">Change Action Stats</h3>
-            <div className="space-y-6">
-                <div className="flex justify-between items-center border-b pb-4 border-border/50">
-                    <div className="flex flex-col">
-                        <span className="text-sm font-medium text-muted-foreground">Active Actions</span>
-                        <span className="text-xs text-muted-foreground">Total count</span>
-                    </div>
-                    <span className="text-3xl font-bold text-primary">{kpiValues.totalCount}</span>
-                </div>
-                <div className="flex justify-between items-center pt-2">
-                    <div className="flex flex-col">
-                        <span className="text-sm font-medium text-foreground">Overdue Actions</span>
-                        <span className="text-xs text-muted-foreground">Action Required</span>
-                    </div>
-                    <div className="flex flex-col items-end">
-                        <span className={cn("text-4xl font-bold", kpiValues.overdueCount > 0 ? "text-destructive" : "text-emerald-500")}>
-                            {kpiValues.overdueCount}
-                        </span>
-                        {/* Trend Display added manually here since GlassCard is custom structure */}
-                        {biWeeklyTrend !== 0 && (
-                            <div className="flex items-center text-xs mt-1">
-                                {biWeeklyTrend > 0 ? (
-                                    <span className="text-destructive flex items-center font-medium">
-                                    <ArrowUpIcon className="mr-1 h-3 w-3" /> +{biWeeklyTrend}
-                                    </span>
-                                ) : (
-                                    <span className="text-emerald-500 flex items-center font-medium">
-                                    <ArrowDownIcon className="mr-1 h-3 w-3" /> {biWeeklyTrend}
-                                    </span>
-                                )}
-                                <span className="text-muted-foreground ml-1">since last bi-weekly</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </GlassCard>
-
-        {/* Visualizations - Row 1 */}
-        <GlassCard className="lg:col-span-2 p-6">
-             <div className="h-[220px] w-full">
-                 <CapaChart data={monthlyRegistrationData} title="Monthly Registrations" dataKey="total" />
-            </div>
-        </GlassCard>
+      {/* KPI Cards Row */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KpiCard title="Active Actions" value={kpiValues.totalCount} icon={ListTodo} description="From imported file" />
+        <KpiCard
+          title="Overdue Actions"
+          value={kpiValues.overdueCount}
+          icon={AlertTriangle}
+          description={`${kpiValues.totalCount > 0 ? (kpiValues.overdueCount / kpiValues.totalCount * 100).toFixed(1) : 0}% of total`}
+          trend={biWeeklyTrend}
+          trendLabel="since last bi-weekly"
+        />
+        <KpiCard title="Active Changes" value={kpiValues.uniqueChanges} icon={ListTodo} description="Unique change controls" />
+        <KpiCard title="On-Track Rate" value={`${kpiValues.onTrackRate}%`} icon={CheckCircle} description="Actions not past deadline" />
       </div>
 
-      {/* Visualizations - Row 2 */}
+      {/* Charts Row */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <GlassCard className="p-6">
-             <div className="h-[250px] w-full">
-                <CapaChart
-                    data={actionsByChangeIdData}
-                    title="Actions by Change ID"
-                    dataKey="total"
-                    onBarClick={setSelectedChangeId}
-                />
+        <Card>
+          <CardContent className="pt-6">
+            <div className="h-[280px] w-full">
+              <CapaChart
+                data={actionsByChangeIdData}
+                title="Actions by Change"
+                dataKey="total"
+                onBarClick={(name) => {
+                  const entry = actionsByChangeIdData.find(d => d.name === name);
+                  setSelectedChangeId(entry?.rawId ?? name.replace('CMID', ''));
+                }}
+              />
             </div>
-        </GlassCard>
-        <GlassCard className="p-6">
-             <div className="h-[250px] w-full">
-                <CapaChart
-                    data={responsibleChartData}
-                    title="Actions by Responsible"
-                    dataKey="total"
-                />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="h-[280px] w-full">
+              <CapaChart
+                data={responsibleChartData}
+                title="Actions by Responsible"
+                dataKey="total"
+                onBarClick={(name) => setSelectedResponsible(name)}
+              />
             </div>
-        </GlassCard>
+          </CardContent>
+        </Card>
       </div>
 
-       <Card>
-          <CardHeader>
-              <CardTitle>Active Change Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-              <DataTable
-                  columns={columns}
-                  data={processedData}
-                  getRowClassName={(row) => cn(row.isOverdue && "bg-accent/20 hover:bg-accent/30")}
-              />
-          </CardContent>
+      {/* Data Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Change Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DataTable
+            columns={columns}
+            data={processedData}
+            getRowClassName={(row) => cn(row.isOverdue && "bg-accent/20 hover:bg-accent/30")}
+          />
+        </CardContent>
       </Card>
     </div>
   );
@@ -382,8 +370,8 @@ export default function ChangeActionDashboard() {
         }}
         title={
           navigationLevel === 'detail' && selectedAction
-            ? `${selectedAction['Change_ActionID']} — ${selectedAction['Change Title']}`
-            : `Actions for ${selectedChangeId}`
+            ? `Action ${selectedAction['Change_ActionID']} — ${selectedAction['Change Title']}`
+            : `CMID${selectedChangeId}: ${selectedChangeTitle || 'Change Actions'}`
         }
         breadcrumbs={
           navigationLevel === 'detail'
@@ -532,6 +520,69 @@ export default function ChangeActionDashboard() {
             )}
           </>
         ) : null}
+      </DrillDownSheet>
+
+      {/* Responsible Person Drill-Down Sheet */}
+      <DrillDownSheet
+        open={!!selectedResponsible}
+        onOpenChange={(open) => !open && setSelectedResponsible(null)}
+        title={`Actions for ${selectedResponsible}`}
+        onExportCsv={() => {
+          exportToCsv(
+            responsibleDrillDownData,
+            [
+              { key: 'Change_ActionID', header: 'Action ID' },
+              { key: 'Action required prior to change', header: 'Action Required' },
+              { key: 'Change Title', header: 'Change Title' },
+              { key: 'Change ID (CMID)', header: 'CMID' },
+              { key: 'Deadline', header: 'Deadline' },
+              { key: 'Pending Steps', header: 'Pending Steps' },
+            ],
+            `change-actions-${selectedResponsible?.replace(/\s+/g, '-').toLowerCase() ?? 'export'}.csv`
+          );
+        }}
+      >
+        <SummaryBar
+          metrics={[
+            { label: 'Total Actions', value: responsibleDrillDownData.length, icon: ListTodo },
+            { label: 'Overdue', value: responsibleDrillDownData.filter(d => d.isOverdue).length, color: responsibleDrillDownData.filter(d => d.isOverdue).length > 0 ? 'danger' as const : 'default' as const, icon: AlertTriangle },
+            { label: 'Completed', value: responsibleDrillDownData.filter(d => !d['Pending Steps'] || d['Pending Steps'].trim() === '').length, color: 'success' as const, icon: CheckCircle },
+          ]}
+        />
+        <ExpandableDataTable<ChangeActionData>
+          columns={[
+            { key: 'Change_ActionID', header: 'ID', sortable: true },
+            { key: 'Change Title', header: 'Change', cell: (row) => <span className="max-w-[200px] truncate block font-medium">{row['Change Title'] || ''}</span> },
+            { key: 'Action required prior to change', header: 'Action Required', cell: (row) => {
+              const text = row['Action required prior to change'] || '';
+              return <span className="max-w-[200px] truncate block">{text.length > 60 ? text.slice(0, 60) + '...' : text}</span>;
+            }},
+            { key: 'deadlineDate', header: 'Deadline', sortable: true, cell: (row) => isValid(row.deadlineDate) ? format(row.deadlineDate, 'PPP') : 'N/A' },
+            { key: 'status', header: 'Status', cell: (row) => {
+              const pending = row['Pending Steps']?.trim();
+              if (!pending) return <Badge className="bg-teal-500 hover:bg-teal-600 text-white">Completed</Badge>;
+              return row.isOverdue
+                ? <Badge variant="destructive">Overdue</Badge>
+                : <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent">On Time</Badge>;
+            }},
+          ]}
+          data={responsibleDrillDownData}
+          getRowId={(row) => row['Change_ActionID']}
+          getRowClassName={(row) => cn(row.isOverdue && "bg-accent/20")}
+          expandedContent={(row) => (
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="font-medium text-muted-foreground">Full Action: </span>
+                {row['Action required prior to change'] || 'N/A'}
+              </div>
+              <div className="flex gap-4 text-xs text-muted-foreground">
+                <span>CMID{row['Change ID (CMID)'] || '?'}</span>
+                {row['Registration Time'] && <span>Registered: {row['Registration Time']}</span>}
+                {row['Completed On'] && <span>Completed: {row['Completed On']}</span>}
+              </div>
+            </div>
+          )}
+        />
       </DrillDownSheet>
     </div>
   );

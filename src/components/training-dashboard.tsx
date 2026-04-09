@@ -2,13 +2,14 @@
 
 import React, { useState, useMemo } from 'react';
 import { useData } from '@/contexts/data-context';
-import { GlassCard } from '@/components/ui/glass-card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { isValid, startOfDay, isAfter, format, subDays } from 'date-fns';
 import { parseDate } from '@/lib/date-utils';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { DataTable, DataTableColumn } from './data-table';
+import { KpiCard } from './kpi-card';
 import { Badge } from './ui/badge';
-import { FileUp, ArrowUpIcon, ArrowDownIcon, ListTodo, AlertTriangle, CheckCircle, ShieldCheck, Users } from 'lucide-react';
+import { FileUp, ListTodo, AlertTriangle, CheckCircle, ShieldCheck, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip as TooltipUI, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getProductionTeam } from '@/lib/teams';
@@ -83,42 +84,69 @@ export default function TrainingDashboard() {
   const [selectedTrainingId, setSelectedTrainingId] = useState<string | null>(null);
   const [navigationLevel, setNavigationLevel] = useState<'list' | 'detail'>('list');
 
-  const processedData = useMemo(() => {
-    let data = trainingData.map((row: any) => parseTrainingData(row));
+  // Category filter for main view
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
+  const allProcessedData = useMemo(() => {
+    let data = trainingData.map((row: any) => parseTrainingData(row));
     if (teamFilter === 'production') {
         data = data.filter(item => productionTeam.includes(item.trainee));
     }
     return data;
   }, [trainingData, teamFilter, productionTeam]);
 
-  // NEW: Trend Logic
+  // Category counts for filter chips (computed from unfiltered data)
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, { total: number; overdue: number }> = {};
+    allProcessedData.forEach(r => {
+      const cat = r.category || 'Uncategorized';
+      if (!counts[cat]) counts[cat] = { total: 0, overdue: 0 };
+      counts[cat].total++;
+      if (r.status === 'Overdue') counts[cat].overdue++;
+    });
+    return Object.entries(counts)
+      .map(([name, c]) => ({ name, ...c }))
+      .sort((a, b) => b.total - a.total);
+  }, [allProcessedData]);
+
+  // Filtered by category selection
+  const processedData = useMemo(() => {
+    if (!categoryFilter) return allProcessedData;
+    return allProcessedData.filter(r => r.category === categoryFilter);
+  }, [allProcessedData, categoryFilter]);
+
+  // Bi-weekly trend: compare overdue count now vs 2 weeks ago
+  // Uses Completed On date (not Pending Steps) to align with compendium's isTaskOverdue logic
   const biWeeklyTrend = useMemo(() => {
       const today = startOfDay(new Date());
       const twoWeeksAgo = subDays(today, 14);
 
-      let newOverdue = 0;
-      let resolvedOverdue = 0;
+      let overdueNow = 0;
+      let overdueTwoWeeksAgo = 0;
 
-      // Use raw parsed data but apply team filter if needed
       let trendData = trainingData.map((row: any) => parseTrainingData(row));
       if (teamFilter === 'production') {
           trendData = trendData.filter(item => productionTeam.includes(item.trainee));
       }
 
       trendData.forEach(item => {
-          // +1: Became overdue in last 14 days
-          if (item.status === 'Overdue' && item.deadline >= twoWeeksAgo && item.deadline < today) {
-              newOverdue++;
+          if (!isValid(item.deadline)) return;
+          const completedOn = parseDate(item.completedOn);
+
+          // Overdue NOW: deadline is past AND not completed before now
+          if (item.deadline < today) {
+              const completedBeforeNow = isValid(completedOn) && completedOn <= today;
+              if (!completedBeforeNow) overdueNow++;
           }
 
-          // -1: Was overdue 14 days ago, but is now Completed
-          if (item.status === 'Completed' && item.deadline < twoWeeksAgo) {
-              resolvedOverdue++;
+          // Overdue 2 WEEKS AGO: deadline was past AND not completed before then
+          if (item.deadline < twoWeeksAgo) {
+              const completedBeforeThen = isValid(completedOn) && completedOn <= twoWeeksAgo;
+              if (!completedBeforeThen) overdueTwoWeeksAgo++;
           }
       });
 
-      return newOverdue - resolvedOverdue;
+      return overdueNow - overdueTwoWeeksAgo;
   }, [trainingData, teamFilter, productionTeam]);
 
   const stats = useMemo(() => {
@@ -308,130 +336,96 @@ export default function TrainingDashboard() {
             </RadioGroup>
         </div>
 
-      {/* Top-Level Stats */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <GlassCard className="flex flex-col justify-center items-center p-6">
-            <h3 className="text-muted-foreground text-sm uppercase tracking-wider font-semibold">Total Assignments</h3>
-            <p className="text-5xl font-bold mt-2">{stats.total}</p>
-        </GlassCard>
-
-        <GlassCard className="flex flex-col justify-center items-center p-6">
-             <h3 className="text-muted-foreground text-sm uppercase tracking-wider font-semibold mb-4">Completion Rate</h3>
-             <div className="h-[120px] w-[120px] relative">
-                <ResponsiveContainer width="100%" height="100%">
-                    <RadialBarChart
-                        innerRadius="80%"
-                        outerRadius="100%"
-                        data={[{ name: 'completion', value: stats.completionRate, fill: 'hsl(var(--primary))' }]}
-                        startAngle={90}
-                        endAngle={-270}
-                    >
-                        <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                        <RadialBar background dataKey="value" cornerRadius={10} />
-                    </RadialBarChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <span className="text-2xl font-bold">{Math.round(stats.completionRate)}%</span>
-                </div>
-             </div>
-        </GlassCard>
-
-        <GlassCard className="flex flex-col justify-center items-center p-6">
-            <h3 className="text-muted-foreground text-sm uppercase tracking-wider font-semibold">Overdue List</h3>
-            <p className={cn("text-5xl font-bold mt-2", stats.overdue > 0 ? "text-destructive" : "text-emerald-500")}>
-                {stats.overdue}
-            </p>
-             <p className="text-xs text-muted-foreground mt-1">{stats.overdue > 0 ? "Action Required!" : "All Clear"}</p>
-             {/* Manually inserted trend since GlassCard is used */}
-             {biWeeklyTrend !== 0 && (
-                <div className="flex items-center text-xs mt-2">
-                    {biWeeklyTrend > 0 ? (
-                        <span className="text-destructive flex items-center font-medium">
-                        <ArrowUpIcon className="mr-1 h-3 w-3" /> +{biWeeklyTrend}
-                        </span>
-                    ) : (
-                        <span className="text-emerald-500 flex items-center font-medium">
-                        <ArrowDownIcon className="mr-1 h-3 w-3" /> {biWeeklyTrend}
-                        </span>
-                    )}
-                    <span className="text-muted-foreground ml-1">since last bi-weekly</span>
-                </div>
-             )}
-        </GlassCard>
-      </div>
-
-      {/* Visuals */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Training Overview</h3>
-            <ResponsiveContainer width="100%" height={chartHeight}>
-                <BarChart
-                  data={chartData}
-                  layout="vertical"
-                  margin={{ left: 0, right: 20 }}
-                  onClick={(e) => {
-                    if (e && e.activeLabel) {
-                      setSelectedTrainee(e.activeLabel as string);
-                      setSelectedTrainingId(null);
-                      setNavigationLevel('list');
-                    }
-                  }}
-                >
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0} />
-                    <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
-                    <Legend />
-                    {/* 1. Completed: The success state  */}
-                    <Bar dataKey="completed" name="Completed" stackId="a" fill="hsl(var(--chart-4))" cursor="pointer" />
-
-                    {/* 2. Pending: Soft, light pink (The "Curida" secondary color) */}
-                    <Bar dataKey="pending" name="Pending" stackId="a" fill="hsl(var(--chart-2))" cursor="pointer" />
-
-                    {/* 3. Overdue: Heavy, dominant Red (The "Curida" primary/chart-1) */}
-                    <Bar dataKey="overdue" name="Overdue" stackId="a" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} cursor="pointer" />
-                </BarChart>
-            </ResponsiveContainer>
-        </GlassCard>
-
-        <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Process Overview</h3>
-            <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                    <Pie
-                        data={pieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={2}
-                        dataKey="value"
-                        onClick={(data) => {
-                          if (data && data.name) {
-                            setSelectedCategory(data.name);
-                          }
-                        }}
-                        cursor="pointer"
-                    >
-                        {pieData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                        ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
-                    <Legend layout="vertical" verticalAlign="middle" align="right" />
-                </PieChart>
-            </ResponsiveContainer>
-        </GlassCard>
-      </div>
-
-      {/* Detailed View */}
-      <GlassCard className="p-6">
-        <h3 className="text-lg font-semibold mb-4">The Call Out List</h3>
-        <DataTable
-            columns={columns}
-            data={processedData}
-            getRowClassName={(row) => cn(row.status === 'Overdue' && "bg-destructive/10 hover:bg-destructive/20")}
+      {/* KPI Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KpiCard title="Total Assignments" value={stats.total} icon={ListTodo} description={categoryFilter ? `In: ${categoryFilter}` : "From imported file"} />
+        <KpiCard
+          title="Overdue"
+          value={stats.overdue}
+          icon={AlertTriangle}
+          description={stats.overdue > 0 ? "Action required" : "All clear"}
+          trend={biWeeklyTrend}
+          trendLabel="since last bi-weekly"
         />
-      </GlassCard>
+        <KpiCard title="Completion Rate" value={`${Math.round(stats.completionRate)}%`} icon={CheckCircle} description={`${stats.completed} of ${stats.total} completed`} />
+        <KpiCard title="Unique Trainees" value={new Set(processedData.map(r => r.trainee)).size} icon={Users} description="People with training records" />
+      </div>
+
+      {/* Category Filter Chips */}
+      <Card>
+        <CardContent className="pt-4 pb-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-muted-foreground mr-1">Category:</span>
+            <Badge
+              variant={categoryFilter === null ? 'default' : 'outline'}
+              className={cn("cursor-pointer transition-all", categoryFilter === null && "ring-2 ring-primary/20")}
+              onClick={() => setCategoryFilter(null)}
+            >
+              All ({allProcessedData.length})
+            </Badge>
+            {categoryCounts.map(cat => (
+              <Badge
+                key={cat.name}
+                variant={categoryFilter === cat.name ? 'default' : 'outline'}
+                className={cn(
+                  "cursor-pointer transition-all",
+                  categoryFilter === cat.name && "ring-2 ring-primary/20",
+                  cat.overdue > 0 && categoryFilter !== cat.name && "border-destructive/40"
+                )}
+                onClick={() => setCategoryFilter(categoryFilter === cat.name ? null : cat.name)}
+              >
+                {cat.name} ({cat.total}){cat.overdue > 0 && <span className="ml-1 text-destructive">!</span>}
+              </Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Trainee Chart */}
+      <Card>
+        <CardContent className="pt-6">
+          <h3 className="text-lg font-semibold mb-4">
+            Training by Trainee
+            {categoryFilter && <span className="text-sm font-normal text-muted-foreground ml-2">({categoryFilter})</span>}
+          </h3>
+          <ResponsiveContainer width="100%" height={chartHeight}>
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ left: 0, right: 20 }}
+                onClick={(e) => {
+                  if (e && e.activeLabel) {
+                    setSelectedTrainee(e.activeLabel as string);
+                    setSelectedTrainingId(null);
+                    setNavigationLevel('list');
+                  }
+                }}
+              >
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0} />
+                  <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
+                  <Legend />
+                  <Bar dataKey="completed" name="Completed" stackId="a" fill="hsl(var(--chart-4))" cursor="pointer" />
+                  <Bar dataKey="pending" name="Pending" stackId="a" fill="hsl(var(--chart-2))" cursor="pointer" />
+                  <Bar dataKey="overdue" name="Overdue" stackId="a" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} cursor="pointer" />
+              </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Data Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Training Assignments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DataTable
+              columns={columns}
+              data={processedData}
+              getRowClassName={(row) => cn(row.status === 'Overdue' && "bg-destructive/10 hover:bg-destructive/20")}
+          />
+        </CardContent>
+      </Card>
 
       {/* Trainee Drill-Down Sheet */}
       <DrillDownSheet
