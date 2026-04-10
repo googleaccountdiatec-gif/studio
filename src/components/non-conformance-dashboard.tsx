@@ -4,7 +4,7 @@ import React, { useState, useMemo, ChangeEvent } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { FileUp, CalendarIcon, CheckCircle2, XCircle } from 'lucide-react';
+import { FileUp, CalendarIcon, CheckCircle2, XCircle, ListTodo, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
 import { format, isValid, getQuarter, differenceInDays } from 'date-fns';
 import { parseDate } from '@/lib/date-utils';
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +22,9 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { DrillDownSheet, SummaryBar, InsightPanel, InsightCard, ExpandableDataTable, DetailSection } from '@/components/drill-down';
 import { exportToCsv } from '@/lib/csv-export';
+import { STATUS_COLORS, TOOLTIP_STYLE } from '@/lib/chart-utils';
+import { KpiCard } from './kpi-card';
+import { CapaChart } from './capa-chart';
 
 // Updated headers: Removed "Deadline...", Added "Status"
 const EXPECTED_HEADERS = ["Id", "Non Conformance Title", "Classification", "Pending Steps", "Case Worker", "Status", "Registration Time", "Registered By", "Reoccurrence"];
@@ -373,6 +376,40 @@ export default function NonConformanceDashboard() {
     return { total, lowRisk, highRisk, reoccurrenceRate, avgDaysToClose };
   }, [dialogData]);
 
+  const kpiMetrics = useMemo(() => {
+    const data = allDataWithDates;
+    const total = data.length;
+    const highRisk = data.filter(d => d.Classification === 'High risk').length;
+    const reoccurring = data.filter(d => d.Reoccurrence === 'YES').length;
+    const reoccurrenceRate = total > 0 ? ((reoccurring / total) * 100).toFixed(1) : '0.0';
+
+    let totalDays = 0;
+    let closedCount = 0;
+    data.forEach(d => {
+      const reg = parseDate(d['Registration Time']);
+      const comp = parseDate(d['Completed On']);
+      if (isValid(reg) && isValid(comp)) {
+        const days = Math.round((comp.getTime() - reg.getTime()) / (1000 * 60 * 60 * 24));
+        if (days >= 0) { totalDays += days; closedCount++; }
+      }
+    });
+    const avgDays = closedCount > 0 ? Math.round(totalDays / closedCount) : 0;
+
+    return { total, highRisk, reoccurrenceRate, avgDays };
+  }, [allDataWithDates]);
+
+  const caseWorkerChartData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allDataWithDates.forEach(d => {
+      const worker = d['Case Worker'];
+      if (worker) counts[worker] = (counts[worker] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 15);
+  }, [allDataWithDates]);
+
   const selectedNc = useMemo(() => {
     if (!selectedNcId || !dialogData) return null;
     return dialogData.data.find(d => d.Id === selectedNcId) ?? null;
@@ -428,90 +465,86 @@ export default function NonConformanceDashboard() {
 
   const MainContent = () => (
     <div className="space-y-6">
-       <Card>
-        <CardHeader>
-          <CardTitle>Risk & Total Volume Overview</CardTitle>
-          <CardDescription>
-            Low risk, high risk, and total non-conformances per quarter for: {selectedYears.sort().join(', ')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={filteredChartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis stroke="#8884d8" />
-              <Tooltip 
-                contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
-                    borderRadius: '8px', 
-                    border: '1px solid hsl(var(--border))' 
-                }} 
-              />
-              <Legend />
-              
-              {/* LOW RISK: Soft Pink (--chart-4) */}
-              <Bar 
-                dataKey="lowRisk" 
-                name="Low Risk" 
-                fill="hsl(var(--chart-4))" 
-                cursor="pointer" 
-                onClick={(data) => handleSpecificBarClick(data, 'low')}
-              />
-              
-              {/* HIGH RISK: Dangerous Aggressive Red (--chart-2) */}
-              <Bar 
-                dataKey="highRisk" 
-                name="High Risk" 
-                fill="hsl(var(--chart-2))" 
-                cursor="pointer" 
-                onClick={(data) => handleSpecificBarClick(data, 'high')}
-              />
-              
-              {/* TOTAL: The Dominant Black (--chart-1) */}
-              <Bar 
-                dataKey="total" 
-                name="Total NCs" 
-                fill="hsl(var(--chart-1))" 
-                cursor="pointer" 
-                onClick={(data) => handleSpecificBarClick(data, 'total')}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-      <Card>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KpiCard title="Total NCs" value={kpiMetrics.total} icon={ListTodo} description={`For ${selectedYears.sort().join(', ')}`} />
+        <KpiCard title="High Risk" value={kpiMetrics.highRisk} icon={AlertTriangle} description={`${kpiMetrics.total > 0 ? ((kpiMetrics.highRisk / kpiMetrics.total) * 100).toFixed(1) : 0}% of total`} />
+        <KpiCard title="Avg Resolution" value={`${kpiMetrics.avgDays}d`} icon={Clock} description="Average days to close" />
+        <KpiCard title="Reoccurrence Rate" value={`${kpiMetrics.reoccurrenceRate}%`} icon={RefreshCw} description="NCs marked as reoccurring" />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
           <CardHeader>
-            <CardTitle>Reoccurrence Trend</CardTitle>
-             <CardDescription>Count of reoccurring non-conformances per quarter.</CardDescription>
+            <CardTitle>Risk & Total Volume Overview</CardTitle>
+            <CardDescription>
+              Low risk, high risk, and total non-conformances per quarter for: {selectedYears.sort().join(', ')}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-             <ResponsiveContainer width="100%" height={350}>
-                 <LineChart data={filteredChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip 
-                        contentStyle={{ 
-                            backgroundColor: 'hsl(var(--card))', 
-                            borderRadius: '8px', 
-                            border: '1px solid hsl(var(--border))' 
-                        }} 
-                    />
-                    <Legend />
-                    {/* LINE: Using the Red Primary to slash through the data */}
-                    <Line 
-                        type="monotone" 
-                        dataKey="reoccurring" 
-                        name="Reoccurring" 
-                        stroke="hsl(var(--primary))" 
-                        strokeWidth={2} 
-                        cursor="pointer" 
-                        activeDot={{ r: 8, onClick: (_e: any, payload: any) => handleSpecificBarClick(payload.payload, 'reoccurring') }}
-                    />
-                 </LineChart>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={filteredChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis stroke="#8884d8" />
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Legend />
+                <Bar
+                  dataKey="lowRisk"
+                  name="Low Risk"
+                  fill={STATUS_COLORS.lowRisk}
+                  cursor="pointer"
+                  onClick={(data) => handleSpecificBarClick(data, 'low')}
+                />
+                <Bar
+                  dataKey="highRisk"
+                  name="High Risk"
+                  fill={STATUS_COLORS.highRisk}
+                  cursor="pointer"
+                  onClick={(data) => handleSpecificBarClick(data, 'high')}
+                />
+                <Bar
+                  dataKey="total"
+                  name="Total NCs"
+                  fill={STATUS_COLORS.neutral}
+                  cursor="pointer"
+                  onClick={(data) => handleSpecificBarClick(data, 'total')}
+                />
+              </BarChart>
             </ResponsiveContainer>
           </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Reoccurrence Trend</CardTitle>
+            <CardDescription>Count of reoccurring non-conformances per quarter.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={filteredChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="reoccurring"
+                  name="Reoccurring"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  cursor="pointer"
+                  activeDot={{ r: 8, onClick: (_e: any, payload: any) => handleSpecificBarClick(payload.payload, 'reoccurring') }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+      <Card>
+        <CardContent className="pt-6">
+          <div className="h-[280px] w-full">
+            <CapaChart data={caseWorkerChartData} title="NCs by Case Worker (Top 15)" dataKey="total" scrollable />
+          </div>
+        </CardContent>
       </Card>
     </div>
   );

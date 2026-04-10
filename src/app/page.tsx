@@ -2,6 +2,7 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import CapaDashboard from '@/components/capa-dashboard';
+import ChangesDashboard from "@/components/changes-dashboard";
 import ChangeActionDashboard from "@/components/change-action-dashboard";
 import NonConformanceDashboard from "@/components/non-conformance-dashboard";
 import TrainingDashboard from "@/components/training-dashboard";
@@ -30,6 +31,7 @@ export default function Home() {
               <TabsTrigger value="overview">Total Overview</TabsTrigger>
               <TabsTrigger value="batch-release">Batch Release</TabsTrigger>
               <TabsTrigger value="capa">CAPA</TabsTrigger>
+              <TabsTrigger value="changes">Changes</TabsTrigger>
               <TabsTrigger value="change-action">Change Action</TabsTrigger>
               <TabsTrigger value="documents-in-flow">Documents in Flow</TabsTrigger>
               <TabsTrigger value="non-conformance">Non-conformance</TabsTrigger>
@@ -45,6 +47,9 @@ export default function Home() {
             </TabsContent>
             <TabsContent value="capa">
               <CapaDashboard />
+            </TabsContent>
+            <TabsContent value="changes">
+              <ChangesDashboard />
             </TabsContent>
             <TabsContent value="change-action">
               <ChangeActionDashboard />

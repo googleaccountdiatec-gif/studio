@@ -18,6 +18,8 @@ import { Label } from '@/components/ui/label';
 import { DrillDownSheet, SummaryBar, ExpandableDataTable, DetailSection } from '@/components/drill-down';
 import type { ExpandableColumn } from '@/components/drill-down';
 import { exportToCsv } from '@/lib/csv-export';
+import { STATUS_COLORS } from '@/lib/chart-utils';
+import { CapaChart } from '@/components/capa-chart';
 
 interface TrainingData {
   'Record training ID': string;
@@ -109,6 +111,12 @@ export default function TrainingDashboard() {
       .sort((a, b) => b.total - a.total);
   }, [allProcessedData]);
 
+  const categoryChartData = useMemo(() => {
+    return categoryCounts
+      .map(({ name, total }) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
+  }, [categoryCounts]);
+
   // Filtered by category selection
   const processedData = useMemo(() => {
     if (!categoryFilter) return allProcessedData;
@@ -184,14 +192,6 @@ export default function TrainingDashboard() {
     });
     return Object.entries(categoryCounts).map(([name, value]) => ({ name, value }));
   }, [processedData]);
-
-  const PIE_COLORS = [
-    'hsl(var(--chart-1))',
-    'hsl(var(--chart-2))',
-    'hsl(var(--chart-3))',
-    'hsl(var(--chart-4))',
-    'hsl(var(--chart-5))'
-  ];
 
   // Trainee drill-down data
   const traineeRecords = useMemo(() => {
@@ -318,7 +318,7 @@ export default function TrainingDashboard() {
     );
   }
 
-  const chartHeight = Math.max(chartData.length * 50 + 50, 300);
+  const chartHeight = Math.min(Math.max(chartData.length * 50 + 50, 300), 600);
 
   return (
     <div className="space-y-6">
@@ -388,28 +388,39 @@ export default function TrainingDashboard() {
             Training by Trainee
             {categoryFilter && <span className="text-sm font-normal text-muted-foreground ml-2">({categoryFilter})</span>}
           </h3>
-          <ResponsiveContainer width="100%" height={chartHeight}>
-              <BarChart
-                data={chartData}
-                layout="vertical"
-                margin={{ left: 0, right: 20 }}
-                onClick={(e) => {
-                  if (e && e.activeLabel) {
-                    setSelectedTrainee(e.activeLabel as string);
-                    setSelectedTrainingId(null);
-                    setNavigationLevel('list');
-                  }
-                }}
-              >
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0} />
-                  <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
-                  <Legend />
-                  <Bar dataKey="completed" name="Completed" stackId="a" fill="hsl(var(--chart-4))" cursor="pointer" />
-                  <Bar dataKey="pending" name="Pending" stackId="a" fill="hsl(var(--chart-2))" cursor="pointer" />
-                  <Bar dataKey="overdue" name="Overdue" stackId="a" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} cursor="pointer" />
-              </BarChart>
-          </ResponsiveContainer>
+          <div className="overflow-y-auto" style={{ maxHeight: 600 }}>
+            <ResponsiveContainer width="100%" height={chartHeight}>
+                <BarChart
+                  data={chartData}
+                  layout="vertical"
+                  margin={{ left: 0, right: 20 }}
+                  onClick={(e) => {
+                    if (e && e.activeLabel) {
+                      setSelectedTrainee(e.activeLabel as string);
+                      setSelectedTrainingId(null);
+                      setNavigationLevel('list');
+                    }
+                  }}
+                >
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0} />
+                    <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
+                    <Legend />
+                    <Bar dataKey="completed" name="Completed" stackId="a" fill={STATUS_COLORS.completed} cursor="pointer" />
+                    <Bar dataKey="pending" name="Pending" stackId="a" fill={STATUS_COLORS.pending} cursor="pointer" />
+                    <Bar dataKey="overdue" name="Overdue" stackId="a" fill={STATUS_COLORS.overdue} radius={[0, 4, 4, 0]} cursor="pointer" />
+                </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Training by Category Chart */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="h-[280px] w-full">
+            <CapaChart data={categoryChartData} title="Training by Category" dataKey="total" scrollable />
+          </div>
         </CardContent>
       </Card>
 

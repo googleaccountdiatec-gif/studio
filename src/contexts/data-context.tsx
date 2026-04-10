@@ -9,6 +9,7 @@ interface NonConformanceData { [key: string]: any; }
 interface TrainingData { [key: string]: any; }
 interface BatchReleaseData { [key: string]: any; }
 interface DocumentKpiData { [key: string]: any; }
+interface ChangeKpiData { [key: string]: any; }
 
 interface DataContextType {
   capaData: CapaData[];
@@ -17,6 +18,7 @@ interface DataContextType {
   trainingData: TrainingData[];
   batchReleaseData: BatchReleaseData[];
   documentKpiData: DocumentKpiData[];
+  changeKpiData: ChangeKpiData[];
   snapshots: MetricSnapshot[];
   setCapaData: React.Dispatch<React.SetStateAction<CapaData[]>>;
   setChangeActionData: React.Dispatch<React.SetStateAction<ChangeActionData[]>>;
@@ -24,6 +26,7 @@ interface DataContextType {
   setTrainingData: React.Dispatch<React.SetStateAction<TrainingData[]>>;
   setBatchReleaseData: React.Dispatch<React.SetStateAction<BatchReleaseData[]>>;
   setDocumentKpiData: React.Dispatch<React.SetStateAction<DocumentKpiData[]>>;
+  setChangeKpiData: React.Dispatch<React.SetStateAction<ChangeKpiData[]>>;
   saveSnapshot: (metrics: MetricSnapshot['metrics']) => Promise<void>;
   refreshSnapshots: () => Promise<void>;
 }
@@ -37,6 +40,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [trainingData, setTrainingData] = useState<TrainingData[]>([]);
   const [batchReleaseData, setBatchReleaseData] = useState<BatchReleaseData[]>([]);
   const [documentKpiData, setDocumentKpiData] = useState<DocumentKpiData[]>([]);
+  const [changeKpiData, setChangeKpiData] = useState<ChangeKpiData[]>([]);
   const [snapshots, setSnapshots] = useState<MetricSnapshot[]>([]);
 
   const fetchSnapshots = async () => {
@@ -98,6 +102,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       trainingData,
       batchReleaseData,
       documentKpiData,
+      changeKpiData,
       snapshots,
       setCapaData,
       setChangeActionData,
@@ -105,6 +110,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setTrainingData,
       setBatchReleaseData,
       setDocumentKpiData,
+      setChangeKpiData,
       saveSnapshot,
       refreshSnapshots: fetchSnapshots
     }}>

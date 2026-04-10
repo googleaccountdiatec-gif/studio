@@ -12,6 +12,8 @@ import { format, isAfter, isValid, startOfDay, subDays } from 'date-fns';
 import { parseDate } from '@/lib/date-utils';
 import { useToast } from "@/hooks/use-toast";
 import type { CapaData } from '@/lib/types';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip } from 'recharts';
+import { STATUS_COLORS, TOOLTIP_STYLE } from '@/lib/chart-utils';
 import { KpiCard } from './kpi-card';
 import { DataTable, DataTableColumn } from './data-table';
 import { CapaChart } from './capa-chart';
@@ -28,7 +30,7 @@ import type { ExpandableColumn } from '@/components/drill-down';
 import { exportToCsv } from '@/lib/csv-export';
 import { findLinkedDocuments } from '@/lib/cross-references';
 
-
+const PRIORITY_COLORS = ['hsl(142 76% 36%)', 'hsl(35 90% 60%)', 'hsl(0 84% 60%)', 'hsl(var(--primary))'];
 
 export default function CapaDashboard() {
   const { capaData, documentKpiData } = useData();
@@ -155,17 +157,19 @@ export default function CapaDashboard() {
   }, [kpiValues]);
 
   const chartDataByAssignee = useMemo(() => {
-    const assigneeCounts: { [key: string]: number } = {};
+    const assigneeCounts: { [key: string]: { onTime: number; overdue: number } } = {};
     filteredData.forEach(item => {
       const assignee = item['Assigned To'];
-      if(assignee) {
-        assigneeCounts[assignee] = (assigneeCounts[assignee] || 0) + 1;
+      if (assignee) {
+        if (!assigneeCounts[assignee]) assigneeCounts[assignee] = { onTime: 0, overdue: 0 };
+        if (item.isOverdue) assigneeCounts[assignee].overdue++;
+        else assigneeCounts[assignee].onTime++;
       }
     });
     return Object.entries(assigneeCounts)
-      .map(([name, total]) => ({ name, total }))
+      .map(([name, counts]) => ({ name, ...counts, total: counts.onTime + counts.overdue }))
       .sort((a, b) => b.total - a.total)
-      .slice(0, 10); // Show top 10 assignees
+      .slice(0, 10);
   }, [filteredData]);
 
   const assigneeCapas = useMemo(() => {
@@ -305,20 +309,34 @@ export default function CapaDashboard() {
             <Card className="lg:col-span-3">
               <CardContent className="pt-6">
                 <div className="h-[280px] w-full">
-                  <CapaChart
-                      data={chartDataByAssignee}
-                      title="CAPAs by Assignee (Top 10)"
-                      dataKey="total"
-                      scrollable
-                      onBarClick={setSelectedAssignee}
-                  />
+                  <h3 className="text-lg font-semibold mb-4">CAPAs by Assignee (Top 10)</h3>
+                  <ResponsiveContainer width="100%" height="85%">
+                    <BarChart data={chartDataByAssignee} onClick={(e) => e && e.activeLabel && setSelectedAssignee(e.activeLabel)} margin={{ top: 5, right: 10, left: -20, bottom: 60 }}>
+                      <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} interval={0} angle={-45} textAnchor="end" />
+                      <YAxis fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'transparent' }} />
+                      <Legend />
+                      <Bar dataKey="onTime" name="On Time" stackId="a" fill={STATUS_COLORS.onTime} radius={[0, 0, 0, 0]} cursor="pointer" />
+                      <Bar dataKey="overdue" name="Overdue" stackId="a" fill={STATUS_COLORS.overdue} radius={[4, 4, 0, 0]} cursor="pointer" />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
             <Card className="lg:col-span-2">
               <CardContent className="pt-6">
                 <div className="h-[280px] w-full">
-                  <CapaChart data={chartDataByStatus} title="CAPA Status Overview" dataKey="status" />
+                  <h3 className="text-lg font-semibold mb-4">CAPA Status Overview</h3>
+                  <ResponsiveContainer width="100%" height="85%">
+                    <PieChart>
+                      <Pie data={chartDataByStatus} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="status">
+                        <Cell fill={STATUS_COLORS.onTime} />
+                        <Cell fill={STATUS_COLORS.overdue} />
+                      </Pie>
+                      <Tooltip contentStyle={TOOLTIP_STYLE} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
@@ -328,14 +346,25 @@ export default function CapaDashboard() {
             <Card>
               <CardContent className="pt-6">
                 <div className="h-[250px] w-full">
-                  <CapaChart data={categoryChartData} title="CAPAs by Category" dataKey="total" />
+                  <CapaChart data={categoryChartData} title="CAPAs by Category" dataKey="total" scrollable />
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6">
                 <div className="h-[250px] w-full">
-                  <CapaChart data={priorityChartData} title="CAPAs by Priority" dataKey="total" />
+                  <h3 className="text-lg font-semibold mb-4">CAPAs by Priority</h3>
+                  <ResponsiveContainer width="100%" height="85%">
+                    <PieChart>
+                      <Pie data={priorityChartData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="total" nameKey="name">
+                        {priorityChartData.map((entry, index) => (
+                          <Cell key={entry.name} fill={PRIORITY_COLORS[index % PRIORITY_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={TOOLTIP_STYLE} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>

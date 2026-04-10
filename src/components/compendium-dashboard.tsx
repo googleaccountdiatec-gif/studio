@@ -10,6 +10,7 @@ import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
 import { ArrowUp, ArrowDown, Minus, Save, History } from 'lucide-react';
+import { TOOLTIP_STYLE } from '@/lib/chart-utils';
 import type { DocumentsInFlowMetrics } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
@@ -393,8 +394,8 @@ export default function CompendiumDashboard() {
 
   return (
     <div className="space-y-6">
-      
-      {/* Top Section */}
+
+      {/* NC Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
         <GlassCard className="p-6">
             <div className="flex items-center justify-between mb-4">
@@ -418,7 +419,7 @@ export default function CompendiumDashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} angle={-45} textAnchor="end" height={60} />
                     <YAxis width={30} tick={{fontSize: 10}} />
-                    <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
+                    <Tooltip cursor={{fill: 'transparent'}} contentStyle={TOOLTIP_STYLE} />
                     <Legend wrapperStyle={{fontSize: '12px'}} />
                     <Bar dataKey="lowRisk" name="Low Risk" fill="hsl(var(--chart-4))" cursor="pointer" onClick={(data: any) => handleNcBarClick(data, 'low')} />
                     <Bar dataKey="highRisk" name="High Risk" fill="hsl(var(--chart-2))" cursor="pointer" onClick={(data: any) => handleNcBarClick(data, 'high')} />
@@ -449,7 +450,7 @@ export default function CompendiumDashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} angle={-45} textAnchor="end" height={60} />
                     <YAxis width={30} tick={{fontSize: 10}} />
-                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} />
                     <Legend wrapperStyle={{fontSize: '12px'}} />
                     <Line type="monotone" dataKey="reoccurring" name="Reoccurring" stroke="hsl(var(--primary))" strokeWidth={2} dot={{r: 4}} cursor="pointer" activeDot={{ r: 8, onClick: (_e: any, payload: any) => handleNcReoccurrenceClick(payload) }} />
                  </LineChart>
@@ -507,7 +508,7 @@ export default function CompendiumDashboard() {
                     <BarChart data={overdueData} layout="vertical" margin={{ left: 20, right: 30 }}>
                         <XAxis type="number" hide />
                         <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12, fontWeight: 500 }} />
-                        <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
+                        <Tooltip cursor={{fill: 'transparent'}} contentStyle={TOOLTIP_STYLE} />
                         <Bar dataKey="count" name="Overdue Items" radius={[0, 4, 4, 0]} barSize={40} label={{ position: 'right', fill: 'hsl(var(--foreground))', fontSize: 12, offset: 5 }} cursor="pointer" onClick={(data: any) => {
                             if (!data || !data.name) return
                             const name = data.name as string

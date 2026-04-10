@@ -5,8 +5,10 @@ import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
 import { ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip } from 'recharts';
 import { CapaChart } from './capa-chart';
+import { KpiCard } from './kpi-card';
 import { Badge } from './ui/badge';
-import { FileUp, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
+import { FileUp, FileText, RefreshCw, ShieldCheck, Users } from 'lucide-react';
+import { TOOLTIP_STYLE } from '@/lib/chart-utils';
 import {
   DrillDownSheet,
   SummaryBar,
@@ -106,6 +108,18 @@ export default function DocumentsInFlowDashboard() {
       list.split(',').map(s => s.trim()).filter(Boolean).forEach(person => {
         counts[person] = (counts[person] || 0) + 1;
       });
+    });
+    return Object.entries(counts)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 15);
+  }, [documentsInFlow]);
+
+  const responsibleChartData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    documentsInFlow.forEach(doc => {
+      const resp = doc['Responsible']?.trim();
+      if (resp) counts[resp] = (counts[resp] || 0) + 1;
     });
     return Object.entries(counts)
       .map(([name, total]) => ({ name, total }))
@@ -467,29 +481,9 @@ export default function DocumentsInFlowDashboard() {
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <GlassCard className="p-6">
-          <div className="flex items-center gap-2 mb-2">
-            <FileText className="h-4 w-4 text-muted-foreground" />
-            <p className="text-sm font-medium text-muted-foreground">Total In Flow</p>
-          </div>
-          <p className="text-3xl font-bold">{kpiMetrics.totalInFlow}</p>
-        </GlassCard>
-        <GlassCard className="p-6">
-          <div className="flex items-center gap-2 mb-2">
-            <RefreshCw className="h-4 w-4 text-muted-foreground" />
-            <p className="text-sm font-medium text-muted-foreground">Periodic Review Required</p>
-          </div>
-          <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">
-            {kpiMetrics.periodicReviewRequired}
-          </p>
-        </GlassCard>
-        <GlassCard className="p-6">
-          <div className="flex items-center gap-2 mb-2">
-            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-            <p className="text-sm font-medium text-muted-foreground">Authorized Copies</p>
-          </div>
-          <p className="text-3xl font-bold">{kpiMetrics.authorizedCopies}</p>
-        </GlassCard>
+        <KpiCard title="Total In Flow" value={kpiMetrics.totalInFlow} icon={FileText} description="Documents with pending steps" />
+        <KpiCard title="Periodic Review Required" value={kpiMetrics.periodicReviewRequired} icon={RefreshCw} description="Documents requiring periodic review" />
+        <KpiCard title="Authorized Copies" value={kpiMetrics.authorizedCopies} icon={ShieldCheck} description="Documents with authorized copies" />
       </div>
 
       {/* Charts row */}
@@ -511,7 +505,7 @@ export default function DocumentsInFlowDashboard() {
                   <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Legend layout="vertical" verticalAlign="middle" align="right" />
             </PieChart>
           </ResponsiveContainer>
@@ -554,6 +548,20 @@ export default function DocumentsInFlowDashboard() {
           onRowClick={handleMainRowClick}
         />
       </GlassCard>
+
+      {/* Documents by Responsible */}
+      {responsibleChartData.length > 0 && (
+        <GlassCard className="p-6">
+          <div className="h-[280px] w-full">
+            <CapaChart
+              data={responsibleChartData}
+              title="Documents by Responsible (Top 15)"
+              dataKey="total"
+              scrollable
+            />
+          </div>
+        </GlassCard>
+      )}
 
       {/* Distribution Team DrillDownSheet */}
       <DrillDownSheet

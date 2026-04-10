@@ -9,7 +9,9 @@
       "Bash(npm --version)",
       "Bash(xargs grep:*)",
       "Bash(find \"/c/Users/JoakimSørgård/OneDrive - Curida AS/Dokumenter/GitHub folders/KPI Tracker/studio/src\" -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" \\\\\\) -exec grep -l \"includes\\\\|toLowerCase\\\\|filename\" {} \\\\;)",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "Bash(wc:*)",
+      "Bash(python3:*)"
     ]
   }
 }

@@ -97,21 +97,22 @@ const parseCustomCSV = (text: string): string[][] => {
 };
 
 // Improved file identification using 'includes'
-const fileIdentifier = (filename: string): 'capa' | 'change-action' | 'non-conformance' | 'training' | 'batch-release' | 'document-kpi' | 'unknown' => {
+const fileIdentifier = (filename: string): 'capa' | 'change-action' | 'change-kpi' | 'non-conformance' | 'training' | 'batch-release' | 'document-kpi' | 'unknown' => {
   const name = filename.trim().toLowerCase();
-  
+
   if (name.includes('document') && name.includes('kpi')) return 'document-kpi';
   if (name.includes('capa')) return 'capa';
   if (name.includes('change') && name.includes('action')) return 'change-action';
+  if (name.includes('change') && name.includes('kpi')) return 'change-kpi';
   if (name.includes('non-conformance')) return 'non-conformance';
   if (name.includes('training')) return 'training';
   if (name.includes('batch') && name.includes('release')) return 'batch-release';
-  
+
   return 'unknown';
 }
 
 export function MultiUploader() {
-  const { setCapaData, setChangeActionData, setNonConformanceData, setTrainingData, setBatchReleaseData, setDocumentKpiData } = useData();
+  const { setCapaData, setChangeActionData, setNonConformanceData, setTrainingData, setBatchReleaseData, setDocumentKpiData, setChangeKpiData } = useData();
   const { toast } = useToast();
   const [isDragging, setIsDragging] = useState(false);
 
@@ -166,6 +167,7 @@ export function MultiUploader() {
             case 'training': setTrainingData(data); break;
             case 'batch-release': setBatchReleaseData(data); break;
             case 'document-kpi': setDocumentKpiData(data); break;
+            case 'change-kpi': setChangeKpiData(data); break;
           }
 
         } catch (error) {

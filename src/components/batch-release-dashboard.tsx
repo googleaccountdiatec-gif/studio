@@ -5,7 +5,8 @@ import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
 import { isValid, getMonth, getYear, format } from 'date-fns';
 import { parseDate } from '@/lib/date-utils';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, LabelList } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, LabelList, PieChart, Pie, Cell } from 'recharts';
+import { TOOLTIP_STYLE } from '@/lib/chart-utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -214,6 +215,22 @@ export default function BatchReleaseDashboard() {
       .slice(0, 10);
   }, [filteredData, selectedYears]);
 
+  // --- Production Type Chart Data ---
+  const productionTypeData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredData.forEach(item => {
+      const year = getYear(item.completedDate);
+      if (selectedYears.includes(year)) {
+        const pType = item.productionType || 'Unknown';
+        counts[pType] = (counts[pType] || 0) + 1;
+      }
+    });
+    return Object.entries(counts)
+      .filter(([, v]) => v > 0)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredData, selectedYears]);
+
   // Filtered data for selected years (used in main table and drill-downs)
   const yearFilteredData = useMemo(() => {
     return filteredData.filter(item => {
@@ -377,7 +394,7 @@ export default function BatchReleaseDashboard() {
             fill={`hsl(var(--chart-${(index % 5) + 1}))`}
             radius={[4, 4, 0, 0]}
           >
-              <LabelList dataKey={year} position="top" fill="hsl(var(--foreground))" fontSize={10} formatter={(value: any) => value > 0 ? value : ''} />
+              <LabelList dataKey={year} position="top" fill="hsl(var(--foreground))" fontSize={10} />
           </Bar>
       ));
   };
@@ -515,7 +532,7 @@ export default function BatchReleaseDashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', backdropFilter: 'blur(4px)', border: '1px solid hsl(var(--border))' }} />
+                    <Tooltip cursor={{fill: 'transparent'}} contentStyle={TOOLTIP_STYLE} />
                     <Legend />
                     {getChartBars()}
                 </BarChart>
@@ -551,23 +568,44 @@ export default function BatchReleaseDashboard() {
         </GlassCard>
       </div>
 
-      {/* Batches by Product Chart */}
-      {productChartData.length > 0 && (
-        <GlassCard className="p-6">
-          <div className="h-[250px] w-full">
-            <CapaChart
-              data={productChartData}
-              title="Batches by Product"
-              dataKey="total"
-              onBarClick={(name) => {
-                setSelectedProduct(name);
-                setSelectedBatchId(null);
-                setNavigationLevel('list');
-              }}
-            />
-          </div>
-        </GlassCard>
-      )}
+      {/* Batches by Product & Production Type */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {productChartData.length > 0 && (
+          <GlassCard className="p-6">
+            <div className="h-[280px] w-full">
+              <CapaChart
+                data={productChartData}
+                title={`Batches by Product (Top ${Math.min(productChartData.length, 10)})`}
+                dataKey="total"
+                scrollable
+                onBarClick={(name) => {
+                  setSelectedProduct(name);
+                  setSelectedBatchId(null);
+                  setNavigationLevel('list');
+                }}
+              />
+            </div>
+          </GlassCard>
+        )}
+        {productionTypeData.length > 0 && (
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Batches by Production Type</h3>
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={productionTypeData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2} dataKey="value" nameKey="name">
+                    {productionTypeData.map((_, index) => (
+                      <Cell key={index} fill={`hsl(var(--chart-${(index % 5) + 1}))`} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend layout="vertical" verticalAlign="middle" align="right" />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </GlassCard>
+        )}
+      </div>
 
       {/* Main Data Table */}
       <GlassCard className="p-6">

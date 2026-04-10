@@ -19,6 +19,8 @@ import { useData } from '@/contexts/data-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { isQaStep, QA_GROUP_VALUE, NON_QA_GROUP_VALUE } from '@/lib/qa-steps';
+import { ResponsiveContainer, LineChart, Line, XAxis as RXAxis, YAxis as RYAxis, CartesianGrid, Tooltip } from 'recharts';
+import { TOOLTIP_STYLE } from '@/lib/chart-utils';
 
 import { DrillDownSheet, SummaryBar, ExpandableDataTable, DetailSection, CrossLinkBadge } from '@/components/drill-down';
 import type { ExpandableColumn } from '@/components/drill-down';
@@ -191,6 +193,17 @@ export default function ChangeActionDashboard() {
       .sort((a, b) => b.total - a.total);
   }, [processedData]);
 
+  const pendingStepChartData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    processedData.forEach(item => {
+      const step = item['Pending Steps']?.trim();
+      if (step) counts[step] = (counts[step] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
+  }, [processedData]);
+
   const selectedChangeIdActions = useMemo(() => {
     if (!selectedChangeId) return [];
     return allDataWithDates.filter(item => item['Change ID (CMID)'] === selectedChangeId);
@@ -274,6 +287,15 @@ export default function ChangeActionDashboard() {
     { accessorKey: 'Action required prior to change', header: 'Action Required', cell: (row) => row['Action required prior to change'] },
     { accessorKey: 'Responsible', header: 'Responsible', cell: (row) => row['Responsible'] },
     {
+      accessorKey: 'Pending Steps',
+      header: 'Pending Step',
+      cell: (row) => {
+        const step = row['Pending Steps']?.trim();
+        if (!step) return <Badge className="bg-teal-500 hover:bg-teal-600 text-white">Completed</Badge>;
+        return <Badge variant="outline">{step}</Badge>;
+      }
+    },
+    {
       accessorKey: 'deadlineDate',
       header: 'Deadline',
       cell: (row) => isValid(row.deadlineDate) ? format(row.deadlineDate, 'PPP') : 'Invalid Date'
@@ -304,7 +326,7 @@ export default function ChangeActionDashboard() {
         <KpiCard title="On-Track Rate" value={`${kpiValues.onTrackRate}%`} icon={CheckCircle} description="Actions not past deadline" />
       </div>
 
-      {/* Charts Row */}
+      {/* Charts Row 1 */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardContent className="pt-6">
@@ -332,6 +354,38 @@ export default function ChangeActionDashboard() {
                 scrollable
                 onBarClick={(name) => setSelectedResponsible(name)}
               />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Row 2 */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="h-[280px] w-full">
+              <CapaChart
+                data={pendingStepChartData}
+                title="Actions by Pending Step"
+                dataKey="total"
+                scrollable
+              />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <h3 className="text-lg font-semibold mb-4">Registrations Over Time</h3>
+            <div className="h-[240px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={monthlyRegistrationData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <RXAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} />
+                  <RYAxis fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Line type="monotone" dataKey="total" name="Registered" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
