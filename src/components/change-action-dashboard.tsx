@@ -16,6 +16,9 @@ import { Switch } from '@/components/ui/switch';
 import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useData } from '@/contexts/data-context';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { isQaStep, QA_GROUP_VALUE, NON_QA_GROUP_VALUE } from '@/lib/qa-steps';
 
 import { DrillDownSheet, SummaryBar, ExpandableDataTable, DetailSection, CrossLinkBadge } from '@/components/drill-down';
 import type { ExpandableColumn } from '@/components/drill-down';
@@ -44,6 +47,7 @@ export default function ChangeActionDashboard() {
   const { changeActionData, documentKpiData } = useData();
   const [showCompleted, setShowCompleted] = useState(false);
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
+  const [pendingStepFilter, setPendingStepFilter] = useState<string>('all');
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
   const [navigationLevel, setNavigationLevel] = useState<'list' | 'detail'>('list');
@@ -60,6 +64,15 @@ export default function ChangeActionDashboard() {
   }, [changeActionData]);
 
 
+  const pendingStepOptions = useMemo(() => {
+    const steps = new Set<string>();
+    allDataWithDates.forEach(item => {
+      const step = item['Pending Steps']?.trim();
+      if (step) steps.add(step);
+    });
+    return [...steps].sort();
+  }, [allDataWithDates]);
+
   const processedData = useMemo(() => {
     let baseData = showCompleted
       ? allDataWithDates
@@ -69,8 +82,21 @@ export default function ChangeActionDashboard() {
         baseData = baseData.filter(item => productionTeam.includes(item['Responsible']));
     }
 
+    if (pendingStepFilter !== 'all') {
+      if (pendingStepFilter === QA_GROUP_VALUE) {
+        baseData = baseData.filter(item => isQaStep(item['Pending Steps'] || '', 'change-action'));
+      } else if (pendingStepFilter === NON_QA_GROUP_VALUE) {
+        baseData = baseData.filter(item => {
+          const step = item['Pending Steps']?.trim() || '';
+          return step !== '' && !isQaStep(step, 'change-action');
+        });
+      } else {
+        baseData = baseData.filter(item => (item['Pending Steps']?.trim() || '') === pendingStepFilter);
+      }
+    }
+
     return baseData;
-  }, [allDataWithDates, showCompleted, teamFilter, productionTeam]);
+  }, [allDataWithDates, showCompleted, teamFilter, productionTeam, pendingStepFilter]);
 
   const kpiValues = useMemo(() => {
     const totalCount = processedData.length;
@@ -287,6 +313,7 @@ export default function ChangeActionDashboard() {
                 data={actionsByChangeIdData}
                 title="Actions by Change"
                 dataKey="total"
+                scrollable
                 onBarClick={(name) => {
                   const entry = actionsByChangeIdData.find(d => d.name === name);
                   setSelectedChangeId(entry?.rawId ?? name.replace('CMID', ''));
@@ -302,6 +329,7 @@ export default function ChangeActionDashboard() {
                 data={responsibleChartData}
                 title="Actions by Responsible"
                 dataKey="total"
+                scrollable
                 onBarClick={(name) => setSelectedResponsible(name)}
               />
             </div>
@@ -355,6 +383,23 @@ export default function ChangeActionDashboard() {
                 <Label htmlFor="t2-ca">Production Only</Label>
             </div>
         </RadioGroup>
+        <div className="flex items-center gap-2">
+          <Label className="text-sm">Step:</Label>
+          <Select value={pendingStepFilter} onValueChange={setPendingStepFilter}>
+            <SelectTrigger className="h-8 w-[200px]">
+              <SelectValue placeholder="All Steps" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Steps</SelectItem>
+              <SelectItem value={QA_GROUP_VALUE}>QA Steps</SelectItem>
+              <SelectItem value={NON_QA_GROUP_VALUE}>Non-QA Steps</SelectItem>
+              <Separator className="my-1" />
+              {pendingStepOptions.map(step => (
+                <SelectItem key={step} value={step}>{step}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       {changeActionData.length > 0 ? <MainContent /> : <EmptyState />}
 
@@ -430,6 +475,12 @@ export default function ChangeActionDashboard() {
                       {row['Action required prior to change']}
                     </div>
                   )}
+                  {row['Pending Steps']?.trim() && (
+                    <div>
+                      <span className="font-medium text-muted-foreground">Pending Step: </span>
+                      <Badge variant="outline">{row['Pending Steps']}</Badge>
+                    </div>
+                  )}
                   {row['Registration Time'] && (
                     <div>
                       <span className="font-medium text-muted-foreground">Registration Time: </span>
@@ -492,6 +543,14 @@ export default function ChangeActionDashboard() {
                 <p className="text-sm font-medium">{selectedAction['Completed On'] || 'N/A'}</p>
               </div>
             </div>
+
+            {/* Pending Step */}
+            {selectedAction['Pending Steps']?.trim() && (
+              <div className="rounded-lg border p-4">
+                <p className="text-xs text-muted-foreground">Pending Step</p>
+                <Badge variant="outline" className="mt-1">{selectedAction['Pending Steps']}</Badge>
+              </div>
+            )}
 
             {/* Detail section for full action text */}
             <DetailSection
@@ -575,6 +634,12 @@ export default function ChangeActionDashboard() {
                 <span className="font-medium text-muted-foreground">Full Action: </span>
                 {row['Action required prior to change'] || 'N/A'}
               </div>
+              {row['Pending Steps']?.trim() && (
+                <div>
+                  <span className="font-medium text-muted-foreground">Pending Step: </span>
+                  <Badge variant="outline">{row['Pending Steps']}</Badge>
+                </div>
+              )}
               <div className="flex gap-4 text-xs text-muted-foreground">
                 <span>CMID{row['Change ID (CMID)'] || '?'}</span>
                 {row['Registration Time'] && <span>Registered: {row['Registration Time']}</span>}

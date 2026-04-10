@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - **Dev server:** `npm run dev` (uses Next.js with Turbopack)
-- **Build:** `npm run build` (sets NODE_ENV=production)
+- **Build:** `npx next build` (note: `npm run build` fails on Windows due to Unix-style `NODE_ENV=production`)
 - **Lint:** `npm run lint`
 - **Type check:** `npm run typecheck`
 
@@ -19,6 +19,8 @@ All KPI data is loaded client-side via CSV/TSV file uploads through `MultiUpload
 
 Parsed data is stored in `DataContext` (`src/contexts/data-context.tsx`) — a React Context providing state and setters for each data type. All dashboard components consume data via the `useData()` hook.
 
+**CSV field names are case-sensitive** with exact punctuation from headers (e.g., `Change ID (CMID)`, `Action required prior to change`, `Non Conformance Title`). The CSV parser handles BizzMine-exported data with unescaped quotes mid-field.
+
 **Firestore** is used only for persisting biweekly metric snapshots (`biweekly_snapshots` collection), not for the primary KPI data.
 
 ### Page Structure
@@ -27,6 +29,10 @@ Single page app (`src/app/page.tsx`) with tabbed navigation:
 - **Total Overview (Compendium)** — aggregated executive summary
 - **Batch Release, CAPA, Change Action, Documents in Flow, Non-conformance, Training** — individual KPI dashboards
 - **Settings** — production team member list (persisted to localStorage via `src/lib/teams.ts`), color palette selection
+
+### Overdue & Bi-Weekly Trend Logic
+
+The canonical overdue check is `isTaskOverdue(deadline, completedOn, referenceDate)` in `compendium-dashboard.tsx`. All tabs must use `Completed On` date (not `Pending Steps`) as the completion signal for bi-weekly trend calculations to stay consistent with the compendium. CAPA execution phase uses `Due Date`; effectiveness phase uses `Deadline for effectiveness check`.
 
 ### Key Patterns
 
@@ -47,3 +53,9 @@ Shared types (CapaData, DocumentKpiData, MetricSnapshot) in `src/lib/types.ts`. 
 ### Build Notes
 
 TypeScript and ESLint errors are ignored during builds (`next.config.ts`). Run `npm run typecheck` separately to check types.
+
+On Windows with OneDrive sync, `.next` cache can become corrupted (EINVAL readlink errors). Fix with `rm -rf .next` before rebuilding.
+
+### Drill-Down Architecture
+
+All dashboards use `DrillDownSheet` (right-side sliding panel) with multi-level navigation: Level 1 shows list with `SummaryBar` + `ExpandableDataTable`, Level 2 shows detail view. State pattern: `selectedId` + `navigationLevel` ('list' | 'detail'). Components in `src/components/drill-down/`. CSV export via `exportToCsv()` from `src/lib/csv-export.ts`. Cross-references parsed via `src/lib/cross-references.ts`.

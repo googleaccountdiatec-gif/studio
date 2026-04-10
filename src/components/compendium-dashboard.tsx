@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { DrillDownSheet, SummaryBar, ExpandableDataTable } from '@/components/drill-down';
 import { Badge } from '@/components/ui/badge';
 import { exportToCsv } from '@/lib/csv-export';
+import { isQaStep } from '@/lib/qa-steps';
 
 // --- Helper Functions ---
 
@@ -55,6 +56,7 @@ export default function CompendiumDashboard() {
   const [ncDrillData, setNcDrillData] = useState<{ title: string; items: any[]; filterType: 'all' | 'low' | 'high' | 'reoccurring' } | null>(null);
   const [docFlowDrillData, setDocFlowDrillData] = useState<{ title: string; items: any[] } | null>(null);
   const [ncYearRange, setNcYearRange] = useState<string>('current-prev');
+  const [qaFilter, setQaFilter] = useState<'all' | 'qa' | 'non-qa'>('all');
   const { toast } = useToast();
   const productionTeam = getProductionTeam();
 
@@ -164,6 +166,8 @@ export default function CompendiumDashboard() {
     capaData.forEach(item => {
        if (teamFilter === 'production' && !productionTeam.includes(item['Assigned To'])) return;
        const pendingSteps = item['Pending Steps']?.trim() || "";
+       if (qaFilter === 'qa' && !isQaStep(pendingSteps, 'capa')) return;
+       if (qaFilter === 'non-qa' && isQaStep(pendingSteps, 'capa')) return;
        const isEffectiveness = pendingSteps.toLowerCase().includes('effectiveness');
        const deadlineStr = isEffectiveness
          ? (item['Deadline for effectiveness check'] || item['Due Date'])
@@ -178,6 +182,8 @@ export default function CompendiumDashboard() {
     // Change Actions
     changeActionData.forEach(item => {
         if (teamFilter === 'production' && !productionTeam.includes(item['Responsible'])) return;
+        if (qaFilter === 'qa' && !isQaStep(item['Pending Steps'] || '', 'change-action')) return;
+        if (qaFilter === 'non-qa' && isQaStep(item['Pending Steps'] || '', 'change-action')) return;
         if (isTaskOverdue(item['Deadline'], item['Completed On'], referenceDate)) {
             changeActions++;
         }
@@ -186,6 +192,8 @@ export default function CompendiumDashboard() {
     // Training
     trainingData.forEach(item => {
         if (teamFilter === 'production' && !productionTeam.includes(item['Trainee'])) return;
+        if (qaFilter === 'qa' && !isQaStep(item['Pending Steps'] || '', 'training')) return;
+        if (qaFilter === 'non-qa' && isQaStep(item['Pending Steps'] || '', 'training')) return;
         if (isTaskOverdue(item['Deadline for completing training'], item['Completed On'], referenceDate)) {
             training++;
         }
@@ -235,7 +243,7 @@ export default function CompendiumDashboard() {
   const currentMetrics = useMemo(() => ({
     ...getOverdueSnapshot(new Date()),
     documentsInFlow: getDocumentsInFlowMetrics(),
-  }), [capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam]);
+  }), [capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam, qaFilter]);
 
   // --- Overdue Data (Current) for Chart ---
   const overdueData = useMemo(() => {
@@ -318,7 +326,7 @@ export default function CompendiumDashboard() {
     } : null;
 
     return { comparisonData: deltas, comparisonLabel: label, docFlowDeltas: docDeltas };
-  }, [selectedSnapshotId, snapshots, currentMetrics, capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam]);
+  }, [selectedSnapshotId, snapshots, currentMetrics, capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam, qaFilter]);
 
   const handleSaveSnapshot = async () => {
     setIsSaving(true);
@@ -452,18 +460,33 @@ export default function CompendiumDashboard() {
       {/* Bottom Section: Overdue Metrics & Changes */}
       <GlassCard className="p-6">
         <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold">Total Overdue Overview</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold">Total Overdue Overview</h3>
+              {qaFilter !== 'all' && (
+                <Badge variant="outline" className="text-xs">{qaFilter === 'qa' ? 'QA Only' : 'Non-QA'}</Badge>
+              )}
+            </div>
             <div className="flex items-center gap-4">
-                <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleSaveSnapshot} 
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSaveSnapshot}
                     disabled={isSaving}
                     className="h-8 gap-2"
                 >
                     <Save className="w-4 h-4" />
                     {isSaving ? "Saving..." : "Save Snapshot"}
                 </Button>
+                <Select value={qaFilter} onValueChange={(v) => setQaFilter(v as any)}>
+                  <SelectTrigger className="h-8 w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Steps</SelectItem>
+                    <SelectItem value="qa">QA Steps Only</SelectItem>
+                    <SelectItem value="non-qa">Non-QA Steps</SelectItem>
+                  </SelectContent>
+                </Select>
                 <RadioGroup value={teamFilter} onValueChange={(value) => setTeamFilter(value as any)} className="flex items-center gap-4">
                     <div className="flex items-center space-x-2">
                         <RadioGroupItem value="all" id="t1-comp" />
@@ -501,6 +524,8 @@ export default function CompendiumDashboard() {
                               items = (capaData as any[]).filter(d => {
                                 if (teamFilter === 'production' && !productionTeam.includes(d['Assigned To'])) return false
                                 const pendingSteps = (d['Pending Steps']?.trim() || '').toLowerCase()
+                                if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'capa')) return false
+                                if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'capa')) return false
                                 if (pendingSteps.includes('effectiveness')) return false
                                 return isTaskOverdue(d['Due Date'], d['Completed On'], now)
                               })
@@ -508,6 +533,8 @@ export default function CompendiumDashboard() {
                               items = (capaData as any[]).filter(d => {
                                 if (teamFilter === 'production' && !productionTeam.includes(d['Assigned To'])) return false
                                 const pendingSteps = (d['Pending Steps'] || '').trim()
+                                if (qaFilter === 'qa' && !isQaStep(pendingSteps, 'capa')) return false
+                                if (qaFilter === 'non-qa' && isQaStep(pendingSteps, 'capa')) return false
                                 if (!pendingSteps.toLowerCase().includes('effectiveness')) return false
                                 const deadlineStr = d['Deadline for effectiveness check'] || d['Due Date']
                                 return isTaskOverdue(deadlineStr, d['Completed On'], now)
@@ -515,11 +542,15 @@ export default function CompendiumDashboard() {
                             } else if (name.includes('Change')) {
                               items = (changeActionData as any[]).filter(d => {
                                 if (teamFilter === 'production' && !productionTeam.includes(d['Responsible'])) return false
+                                if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'change-action')) return false
+                                if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'change-action')) return false
                                 return isTaskOverdue(d['Deadline'], d['Completed On'], now)
                               })
                             } else if (name.includes('Training')) {
                               items = (trainingData as any[]).filter(d => {
                                 if (teamFilter === 'production' && !productionTeam.includes(d['Trainee'])) return false
+                                if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'training')) return false
+                                if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'training')) return false
                                 return isTaskOverdue(d['Deadline for completing training'], d['Completed On'], now)
                               })
                             }
