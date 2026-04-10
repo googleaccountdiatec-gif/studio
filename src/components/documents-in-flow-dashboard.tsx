@@ -521,21 +521,23 @@ export default function DocumentsInFlowDashboard() {
           <div className="h-[350px] w-full">
             <CapaChart
               data={statusData}
-              title="Documents by Current Status"
+              title="Documents by Pending Step"
               dataKey="total"
+              scrollable
               onBarClick={(name) => setSelectedStatus(name)}
             />
           </div>
         </GlassCard>
       </div>
 
-      {/* Distribution Team chart */}
+      {/* Distribution List chart */}
       <GlassCard className="p-6">
-        <div className="h-[400px] w-full">
+        <div className="h-[300px] w-full">
           <CapaChart
             data={distributionTeamData}
-            title="Distribution Team (Top 15)"
+            title="Documents per Distribution Recipient (Top 15)"
             dataKey="total"
+            scrollable
             onBarClick={(name) => setSelectedDistPerson(name)}
           />
         </div>

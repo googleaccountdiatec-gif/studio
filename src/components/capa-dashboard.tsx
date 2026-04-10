@@ -302,22 +302,43 @@ export default function CapaDashboard() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-5">
-            <div className="lg:col-span-3">
-                <CapaChart
-                    data={chartDataByAssignee}
-                    title="CAPAs by Assignee (Top 10)"
-                    dataKey="total"
-                    onBarClick={setSelectedAssignee}
-                />
-            </div>
-            <div className="lg:col-span-2">
-                <CapaChart data={chartDataByStatus} title="CAPA Status Overview" dataKey="status" />
-            </div>
+            <Card className="lg:col-span-3">
+              <CardContent className="pt-6">
+                <div className="h-[280px] w-full">
+                  <CapaChart
+                      data={chartDataByAssignee}
+                      title="CAPAs by Assignee (Top 10)"
+                      dataKey="total"
+                      scrollable
+                      onBarClick={setSelectedAssignee}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="lg:col-span-2">
+              <CardContent className="pt-6">
+                <div className="h-[280px] w-full">
+                  <CapaChart data={chartDataByStatus} title="CAPA Status Overview" dataKey="status" />
+                </div>
+              </CardContent>
+            </Card>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-            <CapaChart data={categoryChartData} title="CAPAs by Category" dataKey="total" />
-            <CapaChart data={priorityChartData} title="CAPAs by Priority" dataKey="total" />
+            <Card>
+              <CardContent className="pt-6">
+                <div className="h-[250px] w-full">
+                  <CapaChart data={categoryChartData} title="CAPAs by Category" dataKey="total" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="h-[250px] w-full">
+                  <CapaChart data={priorityChartData} title="CAPAs by Priority" dataKey="total" />
+                </div>
+              </CardContent>
+            </Card>
         </div>
 
         <Card>
