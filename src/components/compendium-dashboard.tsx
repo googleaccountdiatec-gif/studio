@@ -533,7 +533,13 @@ export default function CompendiumDashboard() {
                                 if (teamFilter === 'production') {
                                   if (!productionTeam.includes(d['Case Worker']) && !productionTeam.includes(d['Registered By'])) return false
                                 }
-                                return d['Status'] === 'Deadline Exceeded'
+                                if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'nc')) return false
+                                if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'nc')) return false
+                                // Use the same Effective Deadline + isTaskOverdue logic as the count computation
+                                const deadlineStr = d['Effective Deadline']
+                                  || d['Deadline for completing investigation']
+                                  || d['DeadlineInvestigation']
+                                return isTaskOverdue(deadlineStr, d['Completed On'], now)
                               })
                             } else if (name.includes('CAPA') && name.includes('Exec')) {
                               items = (capaData as any[]).filter(d => {
