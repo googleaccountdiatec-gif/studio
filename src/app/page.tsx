@@ -7,7 +7,6 @@ import ChangeActionDashboard from "@/components/change-action-dashboard";
 import NonConformanceDashboard from "@/components/non-conformance-dashboard";
 import TrainingDashboard from "@/components/training-dashboard";
 import BatchReleaseDashboard from "@/components/batch-release-dashboard";
-import BatchRegistryDashboard from "@/components/batch-registry-dashboard";
 import CompendiumDashboard from "@/components/compendium-dashboard";
 import SettingsPage from "@/components/settings-page";
 import DocumentsInFlowDashboard from "@/components/documents-in-flow-dashboard";
@@ -39,7 +38,6 @@ export default function Home() {
             <TabsList>
               <TabsTrigger value="overview">Total Overview</TabsTrigger>
               <TabsTrigger value="batch-release">Batch Release</TabsTrigger>
-              <TabsTrigger value="batch-registry">Batch Registry</TabsTrigger>
               <TabsTrigger value="capa">CAPA</TabsTrigger>
               <TabsTrigger value="changes">Changes</TabsTrigger>
               <TabsTrigger value="change-action">Change Action</TabsTrigger>
@@ -54,9 +52,6 @@ export default function Home() {
             </TabsContent>
             <TabsContent value="batch-release">
               <DashboardSlot><BatchReleaseDashboard /></DashboardSlot>
-            </TabsContent>
-            <TabsContent value="batch-registry">
-              <DashboardSlot><BatchRegistryDashboard /></DashboardSlot>
             </TabsContent>
             <TabsContent value="capa">
               <DashboardSlot><CapaDashboard /></DashboardSlot>
