@@ -3,6 +3,7 @@ import { BizzmineClient } from '@/lib/bizzmine/client';
 import { COLLECTION_CODES, type CollectionKey } from '@/lib/bizzmine/config';
 import { normalizeCapaInstances } from '@/lib/bizzmine/normalize/capa';
 import { normalizeNcInstances } from '@/lib/bizzmine/normalize/nc';
+import { normalizeChangeActionInstances } from '@/lib/bizzmine/normalize/change-actions';
 import { fetchStepMap, type StepMap } from '@/lib/bizzmine/steps';
 import {
   harvestUsersFromRecords,
@@ -84,10 +85,11 @@ export async function POST() {
       return undefined as StepMap | undefined;
     });
 
-  const [fetched, capaStepMap, ncStepMap] = await Promise.all([
+  const [fetched, capaStepMap, ncStepMap, caStepMap] = await Promise.all([
     runWithConcurrency(keys, fetchOne, CONCURRENCY),
     stepMapFetcher(COLLECTION_CODES.capa),
     stepMapFetcher(COLLECTION_CODES.nc),
+    stepMapFetcher(COLLECTION_CODES.changeActions),
   ]);
 
   // 2. Build harvest source from RAW records (before normalization strips OrgChart)
@@ -135,6 +137,15 @@ export async function POST() {
         normalized: true,
         ok: true,
         records: normalizeNcInstances(f.raw, ncStepMap),
+      };
+    }
+    if (f.key === 'changeActions') {
+      return {
+        code: f.code,
+        count: f.raw.length,
+        normalized: true,
+        ok: true,
+        records: normalizeChangeActionInstances(f.raw, caStepMap),
       };
     }
     return {
