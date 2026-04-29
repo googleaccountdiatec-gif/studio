@@ -8,6 +8,7 @@ import { normalizeChangeInstances } from '@/lib/bizzmine/normalize/changes';
 import { normalizeBatchReleaseInstances } from '@/lib/bizzmine/normalize/batch-release';
 import { normalizeBatchRegistryInstances } from '@/lib/bizzmine/normalize/batch-registry';
 import { normalizeDocumentInstances } from '@/lib/bizzmine/normalize/documents';
+import { normalizeTrainingInstances } from '@/lib/bizzmine/normalize/training';
 import { fetchStepMap, type StepMap } from '@/lib/bizzmine/steps';
 import {
   harvestUsersFromRecords,
@@ -188,6 +189,31 @@ export async function POST() {
         normalized: true,
         ok: true,
         records: normalizeDocumentInstances(f.raw, dcStepMap),
+      };
+    }
+    if (f.key === 'training') {
+      // Merge A004 (regular) + A007 (introduction) into one stream.
+      // A007's per-collection entry is emitted below as { records: [], merged: true }
+      // so the client knows not to ingest it separately.
+      const a007 = fetched.find((x) => x.key === 'introTraining');
+      const merged = normalizeTrainingInstances(f.raw, a007?.raw ?? []);
+      return {
+        code: f.code,
+        count: merged.length,
+        normalized: true,
+        ok: true,
+        records: merged,
+      };
+    }
+    if (f.key === 'introTraining') {
+      // Already merged into the 'training' result above. Emit an empty
+      // marker so the client doesn't double-ingest into a separate slot.
+      return {
+        code: f.code,
+        count: f.raw.length,
+        normalized: true,
+        ok: true,
+        records: [],
       };
     }
     return {
