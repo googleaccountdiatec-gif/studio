@@ -331,7 +331,7 @@ export default function CapaDashboard() {
                       <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} interval={0} angle={-45} textAnchor="end" />
                       <YAxis fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'transparent' }} />
-                      <Legend />
+                      <Legend verticalAlign="top" height={28} />
                       <Bar dataKey="onTime" name="On Time" stackId="a" fill={STATUS_COLORS.onTime} radius={[0, 0, 0, 0]} cursor="pointer" />
                       <Bar dataKey="overdue" name="Overdue" stackId="a" fill={STATUS_COLORS.overdue} radius={[4, 4, 0, 0]} cursor="pointer" />
                     </BarChart>
