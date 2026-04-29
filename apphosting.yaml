@@ -29,3 +29,13 @@ env:
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     value: "1:646504045808:web:e476dfb12074287ee73635"
     availability: [BUILD, RUNTIME]
+  # BizzMine API
+  - variable: BIZZMINE_API_BASE
+    value: "https://diatec-api.bizzmine.cloud"
+    availability: [RUNTIME]
+  - variable: BIZZMINE_TENANT
+    value: "diatec-live"
+    availability: [RUNTIME]
+  - variable: BIZZMINE_TOKEN
+    secret: bizzmine-token
+    availability: [RUNTIME]
