@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { BizzmineClient } from '@/lib/bizzmine/client';
 import { COLLECTION_CODES, type CollectionKey } from '@/lib/bizzmine/config';
 import { normalizeCapaInstances } from '@/lib/bizzmine/normalize/capa';
+import { fetchStepMap, type StepMap } from '@/lib/bizzmine/steps';
 import {
   harvestUsersFromRecords,
   loadPersistedUsers,
@@ -72,8 +73,18 @@ export async function POST() {
   const startedAt = new Date().toISOString();
   const keys = Object.keys(COLLECTION_CODES) as CollectionKey[];
 
-  // 1. Fetch every collection in parallel (capped concurrency)
-  const fetched = await runWithConcurrency(keys, fetchOne, CONCURRENCY);
+  // 1. Fetch every collection in parallel (capped concurrency).
+  //    In parallel, fetch the CAPA step map so PendingSteps IDs can be
+  //    resolved to human-readable names + classified into phases.
+  //    Future Phase 3 normalizers (NC, Change_Actions, etc.) will fetch
+  //    their own step maps the same way.
+  const [fetched, capaStepMap] = await Promise.all([
+    runWithConcurrency(keys, fetchOne, CONCURRENCY),
+    fetchStepMap(COLLECTION_CODES.capa).catch((e) => {
+      console.error('CAPA step map fetch failed (records will fall back to ID strings):', e);
+      return undefined as StepMap | undefined;
+    }),
+  ]);
 
   // 2. Build harvest source from RAW records (before normalization strips OrgChart)
   const harvestSource: Record<string, RawInstance[]> = {};
@@ -110,7 +121,7 @@ export async function POST() {
         count: f.raw.length,
         normalized: true,
         ok: true,
-        records: normalizeCapaInstances(f.raw),
+        records: normalizeCapaInstances(f.raw, capaStepMap),
       };
     }
     return {
