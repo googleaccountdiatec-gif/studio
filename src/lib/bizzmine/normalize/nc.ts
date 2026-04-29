@@ -71,11 +71,19 @@ export interface NormalizedNc {
   /** Structured phase classification — robust replacement for substring matching. */
   'Phase': NcPhase;
   /**
-   * Pre-computed deadline: DeadlineInvestigation when in registration/investigation
-   * phase, empty otherwise. NC's workflow doesn't have a single Due Date field
-   * shared across phases — this is the closest analogue of CAPA's Effective Deadline.
+   * Pre-computed deadline: DeadlineInvestigation when not closed, otherwise empty.
+   * Used for the "Investigation Overdue" metric — records past their original
+   * investigation deadline regardless of current phase.
    */
   'Effective Deadline': string;
+  /**
+   * BizzMine's auto-computed earliest pending deadline for the record's CURRENT
+   * step. Distinct from Effective Deadline: BizzMine uses this for its
+   * "Deadline Exceeded" status flag. A record stuck in late-stage closing that
+   * has no closing-step deadline will have an empty Earliest Due Date even if
+   * its old investigation deadline is way past.
+   */
+  'Earliest Due Date': string;
   /** Embedded linked records (NC -> CAPA, Attachments, Suppliers, etc.). */
   _subCollections: Record<string, SubCollectionEntry[]>;
   [key: string]: unknown;
@@ -154,6 +162,7 @@ export function normalizeNcRecord(raw: RawInstance, stepMap?: StepMap): Normaliz
     'Repeated operation/analysis': typeof raw.NC_Repeatedoperation === 'string' ? raw.NC_Repeatedoperation : '',
     'Phase': phase,
     'Effective Deadline': effective,
+    'Earliest Due Date': toIsoDate(raw.NC_EarliestDueDate),
     _subCollections: subs,
   };
 }
