@@ -19,13 +19,11 @@ import { DrillDownSheet, SummaryBar, ExpandableDataTable } from '@/components/dr
 import { Badge } from '@/components/ui/badge';
 import { exportToCsv } from '@/lib/csv-export';
 import { isQaStep } from '@/lib/qa-steps';
+import { wasOpenAndOverdueValues } from '@/lib/time-travel/overdue-at';
+import { Input } from '@/components/ui/input';
 
 // --- Helper Functions ---
 
-
-/**
- * Determines if an item was overdue relative to a specific reference date.
- */
 const formatSnapshotLabel = (timestamp: any): string => {
   const date = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
   if (!isValid(date)) return 'Saved Data';
@@ -33,24 +31,12 @@ const formatSnapshotLabel = (timestamp: any): string => {
   return `Wk ${week} — ${format(date, 'dd.MM.yy')}`;
 };
 
-const isTaskOverdue = (deadlineStr: any, completedDateStr: any, referenceDate: Date): boolean => {
-    const deadline = parseDate(deadlineStr);
-    if (!isValid(deadline)) return false;
-    if (!isBefore(deadline, referenceDate)) return false;
-
-    const completedAt = parseDate(completedDateStr);
-    if (isValid(completedAt)) {
-        if (isBefore(completedAt, referenceDate) || completedAt.getTime() === referenceDate.getTime()) {
-            return false;
-        }
-    }
-    return true;
-};
-
 export default function CompendiumDashboard() {
   const { capaData, changeActionData, nonConformanceData, trainingData, documentKpiData, snapshots, saveSnapshot } = useData();
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('auto-2-weeks');
+  // Custom date for the "Custom Date..." comparison option (default to 2 weeks ago).
+  const [customDate, setCustomDate] = useState<string>(() => format(subWeeks(new Date(), 2), 'yyyy-MM-dd'));
   const [isSaving, setIsSaving] = useState(false);
   const [drillThroughData, setDrillThroughData] = useState<{ title: string; items: any[]; category: string } | null>(null);
   const [caDrillChangeId, setCaDrillChangeId] = useState<string | null>(null);
@@ -190,7 +176,7 @@ export default function CompendiumDashboard() {
            ? (item['Deadline for effectiveness check'] || item['Due Date'])
            : item['Due Date']);
 
-       if (isTaskOverdue(deadlineStr, item['Completed On'], referenceDate)) {
+       if (wasOpenAndOverdueValues(referenceDate, deadlineStr, item['Completed On'], item['Registration Time'])) {
            if (isEffectiveness) capaEffectiveness++;
            else capaExecution++;
        }
@@ -201,7 +187,7 @@ export default function CompendiumDashboard() {
         if (teamFilter === 'production' && !productionTeam.includes(item['Responsible'])) return;
         if (qaFilter === 'qa' && !isQaStep(item['Pending Steps'] || '', 'change-action')) return;
         if (qaFilter === 'non-qa' && isQaStep(item['Pending Steps'] || '', 'change-action')) return;
-        if (isTaskOverdue(item['Deadline'], item['Completed On'], referenceDate)) {
+        if (wasOpenAndOverdueValues(referenceDate, item['Deadline'], item['Completed On'], item['Registration Time'])) {
             changeActions++;
         }
     });
@@ -211,7 +197,7 @@ export default function CompendiumDashboard() {
         if (teamFilter === 'production' && !productionTeam.includes(item['Trainee'])) return;
         if (qaFilter === 'qa' && !isQaStep(item['Pending Steps'] || '', 'training')) return;
         if (qaFilter === 'non-qa' && isQaStep(item['Pending Steps'] || '', 'training')) return;
-        if (isTaskOverdue(item['Deadline for completing training'], item['Completed On'], referenceDate)) {
+        if (wasOpenAndOverdueValues(referenceDate, item['Deadline for completing training'], item['Completed On'], item['Registration Time'])) {
             training++;
         }
     });
@@ -226,7 +212,7 @@ export default function CompendiumDashboard() {
 
         // 1. Deadline Exceeded (BizzMine semantic): past NC_EarliestDueDate
         const earliestDueStr = item['Earliest Due Date'] || item['NC_EarliestDueDate'];
-        if (isTaskOverdue(earliestDueStr, item['Completed On'], referenceDate)) {
+        if (wasOpenAndOverdueValues(referenceDate, earliestDueStr, item['Completed On'], item['Registration Time'])) {
           ncDeadlineExceeded++;
         }
 
@@ -235,7 +221,7 @@ export default function CompendiumDashboard() {
           item['Effective Deadline']
           || item['Deadline for completing investigation']
           || item['NC_DeadlineInvestigation'];
-        if (isTaskOverdue(investigationDeadlineStr, item['Completed On'], referenceDate)) {
+        if (wasOpenAndOverdueValues(referenceDate, investigationDeadlineStr, item['Completed On'], item['Registration Time'])) {
           ncInvestigationOverdue++;
         }
     });
@@ -311,31 +297,51 @@ export default function CompendiumDashboard() {
   };
 
   // --- Bi-Weekly Changes Logic ---
-  const { comparisonData, comparisonLabel, docFlowDeltas } = useMemo(() => {
+  // Source-of-truth for `pastCounts`:
+  //   * `auto-*` and `custom` modes: registration-gated lookback computed from
+  //     the current dataset (src/lib/time-travel/overdue-at.ts). Snapshots are
+  //     only consulted for the document-flow metric, since we don't yet have
+  //     historical document counts in the lookback engine.
+  //   * Saved-snapshot mode: the persisted Firestore record is authoritative.
+  // Both are kept available so the user can compare lookback against historical
+  // snapshots before we retire the snapshot writer.
+  const { comparisonData, comparisonLabel, docFlowDeltas, comparisonSource } = useMemo(() => {
     let pastCounts: any;
     let label = "since last bi-weekly";
+    let source: 'lookback' | 'snapshot' = 'lookback';
     let comparisonDate: Date;
     let pastDocFlow: DocumentsInFlowMetrics | undefined;
 
-    if (selectedSnapshotId === 'auto-2-weeks') {
-        comparisonDate = subWeeks(new Date(), 2);
-        pastCounts = getOverdueSnapshot(comparisonDate);
-        // Use closest saved snapshot for document flow deltas
-        const closestSnap = findClosestSnapshot(comparisonDate);
-        if (closestSnap?.metrics.documentsInFlow) {
-            pastDocFlow = closestSnap.metrics.documentsInFlow;
-        }
-    } else if (selectedSnapshotId === 'auto-1-week') {
-        comparisonDate = subWeeks(new Date(), 1);
-        pastCounts = getOverdueSnapshot(comparisonDate);
-        label = "since last week";
-        const closestSnap = findClosestSnapshot(comparisonDate);
-        if (closestSnap?.metrics.documentsInFlow) {
-            pastDocFlow = closestSnap.metrics.documentsInFlow;
+    const useLookbackForDate = (date: Date, lbl: string) => {
+      comparisonDate = date;
+      pastCounts = getOverdueSnapshot(date);
+      label = lbl;
+      const closestSnap = findClosestSnapshot(date);
+      if (closestSnap?.metrics.documentsInFlow) {
+        pastDocFlow = closestSnap.metrics.documentsInFlow;
+      }
+    };
+
+    if (selectedSnapshotId === 'auto-1-week') {
+        useLookbackForDate(subWeeks(new Date(), 1), 'since last week');
+    } else if (selectedSnapshotId === 'auto-2-weeks') {
+        useLookbackForDate(subWeeks(new Date(), 2), 'since last bi-weekly');
+    } else if (selectedSnapshotId === 'auto-3-weeks') {
+        useLookbackForDate(subWeeks(new Date(), 3), 'since 3 weeks ago');
+    } else if (selectedSnapshotId === 'auto-4-weeks') {
+        useLookbackForDate(subWeeks(new Date(), 4), 'since 4 weeks ago');
+    } else if (selectedSnapshotId === 'custom') {
+        const parsed = parseDate(customDate);
+        if (isValid(parsed)) {
+            useLookbackForDate(parsed, `since ${format(parsed, 'dd.MM.yy')}`);
+        } else {
+            // Fall back to bi-weekly if customDate is unparseable
+            useLookbackForDate(subWeeks(new Date(), 2), 'since last bi-weekly');
         }
     } else {
         const snap = snapshots.find(s => s.id === selectedSnapshotId);
         if (snap) {
+            source = 'snapshot';
             pastCounts = snap.metrics;
             pastDocFlow = snap.metrics.documentsInFlow;
             comparisonDate = snap.timestamp?.toDate ? snap.timestamp.toDate() : new Date(snap.timestamp);
@@ -345,8 +351,7 @@ export default function CompendiumDashboard() {
             else if (daysDiff === 14) label = "since last bi-weekly";
             else label = `since Wk ${getISOWeek(comparisonDate)} — ${format(comparisonDate, 'dd.MM.yy')}`;
         } else {
-            comparisonDate = subWeeks(new Date(), 2);
-            pastCounts = getOverdueSnapshot(comparisonDate);
+            useLookbackForDate(subWeeks(new Date(), 2), 'since last bi-weekly');
         }
     }
 
@@ -371,8 +376,8 @@ export default function CompendiumDashboard() {
         newDocuments: currentMetrics.documentsInFlow.newDocuments - pastDocFlow.newDocuments,
     } : null;
 
-    return { comparisonData: deltas, comparisonLabel: label, docFlowDeltas: docDeltas };
-  }, [selectedSnapshotId, snapshots, currentMetrics, capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam, qaFilter]);
+    return { comparisonData: deltas, comparisonLabel: label, docFlowDeltas: docDeltas, comparisonSource: source };
+  }, [selectedSnapshotId, customDate, snapshots, currentMetrics, capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam, qaFilter]);
 
   const handleSaveSnapshot = async () => {
     setIsSaving(true);
@@ -575,14 +580,14 @@ export default function CompendiumDashboard() {
                                   || d['NC_DeadlineInvestigation']
 
                                 if (wantDeadlineExceeded) {
-                                  return isTaskOverdue(earliestDueStr, d['Completed On'], now)
+                                  return wasOpenAndOverdueValues(now, earliestDueStr, d['Completed On'], d['Registration Time'])
                                 }
                                 if (wantInvestigation) {
-                                  return isTaskOverdue(investigationDeadlineStr, d['Completed On'], now)
+                                  return wasOpenAndOverdueValues(now, investigationDeadlineStr, d['Completed On'], d['Registration Time'])
                                 }
                                 // Legacy 'Non-Conformance' (no specific suffix) — show union of both
-                                return isTaskOverdue(earliestDueStr, d['Completed On'], now)
-                                    || isTaskOverdue(investigationDeadlineStr, d['Completed On'], now)
+                                return wasOpenAndOverdueValues(now, earliestDueStr, d['Completed On'], d['Registration Time'])
+                                    || wasOpenAndOverdueValues(now, investigationDeadlineStr, d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('CAPA') && name.includes('Exec')) {
                               items = (capaData as any[]).filter(d => {
@@ -594,7 +599,7 @@ export default function CompendiumDashboard() {
                                 const phase = d.Phase as string | undefined;
                                 const isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.includes('effectiveness');
                                 if (isEffectiveness) return false
-                                return isTaskOverdue(d['Effective Deadline'] || d['Due Date'], d['Completed On'], now)
+                                return wasOpenAndOverdueValues(now, d['Effective Deadline'] || d['Due Date'], d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('CAPA') && name.includes('Eff')) {
                               items = (capaData as any[]).filter(d => {
@@ -607,21 +612,21 @@ export default function CompendiumDashboard() {
                                 const isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.toLowerCase().includes('effectiveness');
                                 if (!isEffectiveness) return false
                                 const deadlineStr = d['Effective Deadline'] || d['Deadline for effectiveness check'] || d['Due Date']
-                                return isTaskOverdue(deadlineStr, d['Completed On'], now)
+                                return wasOpenAndOverdueValues(now, deadlineStr, d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('Change')) {
                               items = (changeActionData as any[]).filter(d => {
                                 if (teamFilter === 'production' && !productionTeam.includes(d['Responsible'])) return false
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'change-action')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'change-action')) return false
-                                return isTaskOverdue(d['Deadline'], d['Completed On'], now)
+                                return wasOpenAndOverdueValues(now, d['Deadline'], d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('Training')) {
                               items = (trainingData as any[]).filter(d => {
                                 if (teamFilter === 'production' && !productionTeam.includes(d['Trainee'])) return false
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'training')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'training')) return false
-                                return isTaskOverdue(d['Deadline for completing training'], d['Completed On'], now)
+                                return wasOpenAndOverdueValues(now, d['Deadline for completing training'], d['Completed On'], d['Registration Time'])
                               })
                             }
                             const category = (name.includes('NC:') || name.includes('Non-Conformance')) ? 'nc'
@@ -648,13 +653,21 @@ export default function CompendiumDashboard() {
                     <div className="flex items-center justify-between">
                         <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Change</h4>
                         <Select value={selectedSnapshotId} onValueChange={setSelectedSnapshotId}>
-                            <SelectTrigger className="h-6 w-[150px] text-[10px] bg-transparent border-none shadow-none focus:ring-0 px-0 justify-end gap-1">
+                            <SelectTrigger className="h-6 w-[170px] text-[10px] bg-transparent border-none shadow-none focus:ring-0 px-0 justify-end gap-1">
                                 <History className="w-3 h-3" />
                                 <SelectValue placeholder="Select period" />
                             </SelectTrigger>
                             <SelectContent align="end" className="text-xs">
-                                <SelectItem value="auto-1-week">Last 7 Days (Auto)</SelectItem>
-                                <SelectItem value="auto-2-weeks">Last 14 Days (Auto)</SelectItem>
+                                <SelectItem value="auto-1-week">Last 7 Days</SelectItem>
+                                <SelectItem value="auto-2-weeks">Last 14 Days</SelectItem>
+                                <SelectItem value="auto-3-weeks">Last 21 Days</SelectItem>
+                                <SelectItem value="auto-4-weeks">Last 28 Days</SelectItem>
+                                <SelectItem value="custom">Custom Date…</SelectItem>
+                                {snapshots.length > 0 && (
+                                    <div className="px-2 pt-2 pb-1 mt-1 border-t text-[10px] text-muted-foreground uppercase tracking-wider">
+                                        Saved Snapshots
+                                    </div>
+                                )}
                                 {snapshots.map((snap) => (
                                     <SelectItem key={snap.id} value={snap.id!}>
                                         {formatSnapshotLabel(snap.timestamp)}
@@ -663,7 +676,21 @@ export default function CompendiumDashboard() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <p className="text-sm font-semibold capitalize">{comparisonLabel}</p>
+                    {selectedSnapshotId === 'custom' && (
+                        <Input
+                            type="date"
+                            value={customDate}
+                            onChange={(e) => setCustomDate(e.target.value)}
+                            className="h-7 text-xs"
+                            max={format(new Date(), 'yyyy-MM-dd')}
+                        />
+                    )}
+                    <p className="text-sm font-semibold capitalize">
+                      {comparisonLabel}
+                      <span className="ml-1 text-[10px] font-normal lowercase text-muted-foreground">
+                        · {comparisonSource}
+                      </span>
+                    </p>
                 </div>
 
                 {comparisonData.map((item) => (

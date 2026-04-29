@@ -32,31 +32,38 @@ export interface OverdueAtAccessors<T> {
 }
 
 /**
- * True iff the record was both open (existed and not yet completed) AND
- * overdue (past deadline) at refDate.
+ * Value-form: callers extract field values themselves and pass them in.
+ * Useful for call sites that compute the deadline conditionally (e.g.,
+ * CAPA's effectiveness vs execution deadline routing).
+ *
+ * Pass `registrationTime: undefined` (or omit it) to skip the registration
+ * gate entirely — matches legacy behavior for CSV-shaped data that lacks
+ * the field.
  */
-export function wasOpenAndOverdueAt<T>(
-  record: T,
+export function wasOpenAndOverdueValues(
   refDate: Date,
-  acc: OverdueAtAccessors<T>,
+  deadline: unknown,
+  completedOn: unknown,
+  registrationTime?: unknown,
 ): boolean {
   // 1. Registration gate — exclude records that didn't exist at refDate.
-  //    Missing/invalid registration is intentionally permissive (treated as
-  //    "always existed") so CSV-shaped legacy data keeps working.
-  if (acc.getRegistrationTime) {
-    const registered = parseDate(acc.getRegistrationTime(record));
+  //    `undefined` means "no registration info" → skip the gate (permissive).
+  //    A non-undefined-but-invalid value (e.g., '') falls through parseDate
+  //    and isValid → also skipped, matching legacy isTaskOverdue() behavior.
+  if (registrationTime !== undefined) {
+    const registered = parseDate(registrationTime);
     if (isValid(registered) && registered.getTime() > refDate.getTime()) {
       return false;
     }
   }
 
-  // 2. Deadline must exist and be before refDate.
-  const deadline = parseDate(acc.getDeadline(record));
-  if (!isValid(deadline)) return false;
-  if (!isBefore(deadline, refDate)) return false;
+  // 2. Deadline must exist and be strictly before refDate.
+  const dl = parseDate(deadline);
+  if (!isValid(dl)) return false;
+  if (!isBefore(dl, refDate)) return false;
 
   // 3. If completed at or before refDate, it wasn't open then.
-  const completedAt = parseDate(acc.getCompletedOn(record));
+  const completedAt = parseDate(completedOn);
   if (isValid(completedAt)) {
     if (
       isBefore(completedAt, refDate) ||
@@ -66,6 +73,23 @@ export function wasOpenAndOverdueAt<T>(
     }
   }
   return true;
+}
+
+/**
+ * True iff the record was both open (existed and not yet completed) AND
+ * overdue (past deadline) at refDate. Record-form: pass field accessors.
+ */
+export function wasOpenAndOverdueAt<T>(
+  record: T,
+  refDate: Date,
+  acc: OverdueAtAccessors<T>,
+): boolean {
+  return wasOpenAndOverdueValues(
+    refDate,
+    acc.getDeadline(record),
+    acc.getCompletedOn(record),
+    acc.getRegistrationTime ? acc.getRegistrationTime(record) : undefined,
+  );
 }
 
 /** Count of records open & overdue at refDate. */
