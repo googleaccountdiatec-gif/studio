@@ -7,6 +7,7 @@ import { normalizeChangeActionInstances } from '@/lib/bizzmine/normalize/change-
 import { normalizeChangeInstances } from '@/lib/bizzmine/normalize/changes';
 import { normalizeBatchReleaseInstances } from '@/lib/bizzmine/normalize/batch-release';
 import { normalizeBatchRegistryInstances } from '@/lib/bizzmine/normalize/batch-registry';
+import { normalizeDocumentInstances } from '@/lib/bizzmine/normalize/documents';
 import { fetchStepMap, type StepMap } from '@/lib/bizzmine/steps';
 import {
   harvestUsersFromRecords,
@@ -88,12 +89,13 @@ export async function POST() {
       return undefined as StepMap | undefined;
     });
 
-  const [fetched, capaStepMap, ncStepMap, caStepMap, cmStepMap] = await Promise.all([
+  const [fetched, capaStepMap, ncStepMap, caStepMap, cmStepMap, dcStepMap] = await Promise.all([
     runWithConcurrency(keys, fetchOne, CONCURRENCY),
     stepMapFetcher(COLLECTION_CODES.capa),
     stepMapFetcher(COLLECTION_CODES.nc),
     stepMapFetcher(COLLECTION_CODES.changeActions),
     stepMapFetcher(COLLECTION_CODES.changes),
+    stepMapFetcher(COLLECTION_CODES.documents),
   ]);
 
   // 2. Build harvest source from RAW records (before normalization strips OrgChart)
@@ -177,6 +179,15 @@ export async function POST() {
         normalized: true,
         ok: true,
         records: normalizeBatchRegistryInstances(f.raw),
+      };
+    }
+    if (f.key === 'documents') {
+      return {
+        code: f.code,
+        count: f.raw.length,
+        normalized: true,
+        ok: true,
+        records: normalizeDocumentInstances(f.raw, dcStepMap),
       };
     }
     return {
