@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { MetricSnapshot } from '@/lib/types';
+import { saveCache, loadCache, type CachedSync, CACHE_SCHEMA_VERSION } from '@/lib/bizzmine/cache';
 
 interface CapaData { [key: string]: any; }
 interface ChangeActionData { [key: string]: any; }
@@ -110,17 +111,41 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     fetchSnapshots();
-    // Restore lastSyncedAt from localStorage
-    if (typeof window !== 'undefined') {
-      const stored = window.localStorage.getItem(LAST_SYNCED_LS_KEY);
-      if (stored) {
-        const d = new Date(stored);
+    // Restore lastSyncedAt from localStorage AND hydrate dashboard data
+    // from IndexedDB cache so the dashboards render immediately on cold load.
+    let cancelled = false;
+    (async () => {
+      if (typeof window === 'undefined') return;
+
+      const storedTs = window.localStorage.getItem(LAST_SYNCED_LS_KEY);
+      const cached = await loadCache();
+      if (cancelled) return;
+
+      if (cached) {
+        // Hydrate per-collection state from the cached snapshot
+        setCapaData(cached.collections.capa as any[]);
+        setNonConformanceData(cached.collections.nonConformance as any[]);
+        setChangeActionData(cached.collections.changeAction as any[]);
+        setChangeKpiData(cached.collections.changes as any[]);
+        setBatchReleaseData(cached.collections.batchRelease as any[]);
+        setDocumentKpiData(cached.collections.documents as any[]);
+        setTrainingData(cached.collections.training as any[]);
+        // batchRegistry has no dedicated state slot yet (Phase 4.2 introduces one)
+      }
+
+      // Prefer the cache's syncedAt over the localStorage timestamp — they
+      // should match in normal usage, but if they ever diverge the cache is
+      // the authoritative source of "what data is currently loaded".
+      const tsSource = cached?.syncedAt ?? storedTs;
+      if (tsSource) {
+        const d = new Date(tsSource);
         if (!isNaN(d.getTime())) {
           setLastSyncedAt(d);
           setHasEverSynced(true);
         }
       }
-    }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const saveSnapshot = async (metrics: MetricSnapshot['metrics']) => {
@@ -158,24 +183,62 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       }
       const data: SyncResponse = await r.json();
 
-      // Dispatch each collection's records into the appropriate setter
+      // Build the cache payload alongside dispatching to React state
+      const cachePayload: CachedSync = {
+        schemaVersion: CACHE_SCHEMA_VERSION,
+        syncedAt: data.syncedAt,
+        collections: {
+          capa: [],
+          nonConformance: [],
+          changeAction: [],
+          changes: [],
+          batchRelease: [],
+          batchRegistry: [],
+          documents: [],
+          training: [],
+        },
+      };
+
       for (const c of data.collections) {
         if (!c.ok || !c.records) continue;
         const setterKey = COLLECTION_TO_SETTER_KEY[c.code];
         switch (setterKey) {
-          case 'capa': setCapaData(c.records); break;
-          case 'nc': setNonConformanceData(c.records); break;
-          case 'changeActions': setChangeActionData(c.records); break;
-          case 'changes': setChangeKpiData(c.records); break;
-          case 'batchRelease': setBatchReleaseData(c.records); break;
-          case 'documents': setDocumentKpiData(c.records); break;
-          case 'training':
-          case 'introTraining':
-            // Phase 3 will merge A004 + A007. For Phase 2, A004 wins.
-            if (setterKey === 'training') setTrainingData(c.records);
+          case 'capa':
+            setCapaData(c.records);
+            cachePayload.collections.capa = c.records;
             break;
-          // batchRegistry has no existing setter — Phase 3 introduces a new state slot
-          default: break;
+          case 'nc':
+            setNonConformanceData(c.records);
+            cachePayload.collections.nonConformance = c.records;
+            break;
+          case 'changeActions':
+            setChangeActionData(c.records);
+            cachePayload.collections.changeAction = c.records;
+            break;
+          case 'changes':
+            setChangeKpiData(c.records);
+            cachePayload.collections.changes = c.records;
+            break;
+          case 'batchRelease':
+            setBatchReleaseData(c.records);
+            cachePayload.collections.batchRelease = c.records;
+            break;
+          case 'batchRegistry':
+            cachePayload.collections.batchRegistry = c.records;
+            break;
+          case 'documents':
+            setDocumentKpiData(c.records);
+            cachePayload.collections.documents = c.records;
+            break;
+          case 'training':
+            // Phase 3 sync route emits the merged A004 + A007 stream under
+            // the 'training' (A004) entry; the 'introTraining' entry has empty
+            // records[] so it intentionally falls through here.
+            setTrainingData(c.records);
+            cachePayload.collections.training = c.records;
+            break;
+          default:
+            break;
         }
       }
 
@@ -185,6 +248,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(LAST_SYNCED_LS_KEY, synced.toISOString());
       }
+      // Best-effort persist; failures don't block the user
+      saveCache(cachePayload).catch(() => undefined);
       setSyncStatus('idle');
     } catch (e) {
       setSyncStatus('error');
