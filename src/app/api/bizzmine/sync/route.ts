@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { BizzmineClient } from '@/lib/bizzmine/client';
 import { COLLECTION_CODES, type CollectionKey } from '@/lib/bizzmine/config';
 import { normalizeCapaInstances } from '@/lib/bizzmine/normalize/capa';
+import { normalizeNcInstances } from '@/lib/bizzmine/normalize/nc';
 import { fetchStepMap, type StepMap } from '@/lib/bizzmine/steps';
 import {
   harvestUsersFromRecords,
@@ -74,16 +75,19 @@ export async function POST() {
   const keys = Object.keys(COLLECTION_CODES) as CollectionKey[];
 
   // 1. Fetch every collection in parallel (capped concurrency).
-  //    In parallel, fetch the CAPA step map so PendingSteps IDs can be
-  //    resolved to human-readable names + classified into phases.
-  //    Future Phase 3 normalizers (NC, Change_Actions, etc.) will fetch
-  //    their own step maps the same way.
-  const [fetched, capaStepMap] = await Promise.all([
-    runWithConcurrency(keys, fetchOne, CONCURRENCY),
-    fetchStepMap(COLLECTION_CODES.capa).catch((e) => {
-      console.error('CAPA step map fetch failed (records will fall back to ID strings):', e);
+  //    In parallel, fetch step maps for collections whose normalizers
+  //    need them (CAPA, NC). Future Phase 3 normalizers add their codes
+  //    to this list.
+  const stepMapFetcher = (code: string) =>
+    fetchStepMap(code).catch((e) => {
+      console.error(`${code} step map fetch failed (records will fall back to ID strings):`, e);
       return undefined as StepMap | undefined;
-    }),
+    });
+
+  const [fetched, capaStepMap, ncStepMap] = await Promise.all([
+    runWithConcurrency(keys, fetchOne, CONCURRENCY),
+    stepMapFetcher(COLLECTION_CODES.capa),
+    stepMapFetcher(COLLECTION_CODES.nc),
   ]);
 
   // 2. Build harvest source from RAW records (before normalization strips OrgChart)
@@ -122,6 +126,15 @@ export async function POST() {
         normalized: true,
         ok: true,
         records: normalizeCapaInstances(f.raw, capaStepMap),
+      };
+    }
+    if (f.key === 'nc') {
+      return {
+        code: f.code,
+        count: f.raw.length,
+        normalized: true,
+        ok: true,
+        records: normalizeNcInstances(f.raw, ncStepMap),
       };
     }
     return {
