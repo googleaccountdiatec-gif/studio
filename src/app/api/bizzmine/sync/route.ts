@@ -29,6 +29,10 @@ interface SyncResultPerCollection {
   ok: boolean;
   error?: string;
   records?: unknown[];
+  /** When this collection's records were merged into another (e.g. A007 -> A004). */
+  mergedInto?: string;
+  /** Raw count of records before merging (informational). */
+  mergedSourceCount?: number;
 }
 
 interface FetchResult {
@@ -206,15 +210,19 @@ export async function POST() {
       };
     }
     if (f.key === 'introTraining') {
-      // Already merged into the 'training' result above. Emit an empty
-      // marker so the client doesn't double-ingest into a separate slot.
+      // Already merged into the 'training' result above. Emit count 0
+      // and empty records so the client doesn't double-ingest into a
+      // separate slot. The raw count is preserved in 'mergedInto' for
+      // sanity checking the merge.
       return {
         code: f.code,
-        count: f.raw.length,
+        count: 0,
         normalized: true,
         ok: true,
         records: [],
-      };
+        mergedInto: COLLECTION_CODES.training,
+        mergedSourceCount: f.raw.length,
+      } as SyncResultPerCollection;
     }
     return {
       code: f.code,
