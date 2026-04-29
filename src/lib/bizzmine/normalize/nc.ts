@@ -131,14 +131,20 @@ export function normalizeNcRecord(raw: RawInstance, stepMap?: StepMap): Normaliz
   // or QA approval — those are exactly the records that should still flag
   // as overdue until the NC is fully closed.)
   const effective = phase === 'closed' ? '' : deadlineInvestigation;
+  const earliestDueDateIso = toIsoDate(raw.NC_EarliestDueDate);
 
-  // Status: EnumList numeric code; emit as string for now (dashboards rarely
-  // depend on specific text values, and resolving the EnumList lookup is a
-  // separate Phase 4 concern).
-  const statusStr =
-    raw.NC_Status === undefined || raw.NC_Status === null
-      ? ''
-      : String(raw.NC_Status);
+  // Status: derive a friendly text matching the CSV-export semantic
+  // ('Closed' / 'Deadline Exceeded' / 'Open') so dashboards that check
+  // `Status === 'Deadline Exceeded'` keep working AND badges show readable
+  // text instead of raw enum codes ('1', '3').
+  // Note: Deadline Exceeded is computed at SYNC TIME against NC_EarliestDueDate
+  // (matching BizzMine's own derivation). The cached value reflects state at
+  // last sync — consistent with our manual-sync model.
+  const statusStr = computeNcStatusLabel(
+    raw.NC_Status,
+    completedOnIso,
+    earliestDueDateIso,
+  );
 
   return {
     'Id': idOrEmpty === '' ? '' : String(idOrEmpty),
@@ -162,9 +168,36 @@ export function normalizeNcRecord(raw: RawInstance, stepMap?: StepMap): Normaliz
     'Repeated operation/analysis': typeof raw.NC_Repeatedoperation === 'string' ? raw.NC_Repeatedoperation : '',
     'Phase': phase,
     'Effective Deadline': effective,
-    'Earliest Due Date': toIsoDate(raw.NC_EarliestDueDate),
+    'Earliest Due Date': earliestDueDateIso,
     _subCollections: subs,
   };
+}
+
+/**
+ * Derive a friendly NC Status string at sync time.
+ *
+ *   Closed              — CompletedOn is set
+ *   Deadline Exceeded   — not closed AND Earliest Due Date is past now
+ *   Open                — not closed AND deadline not yet passed (or no deadline)
+ *   <numeric code>      — defensive fallback if Status is some other value
+ */
+function computeNcStatusLabel(
+  rawStatus: unknown,
+  completedOnIso: string,
+  earliestDueDateIso: string,
+): string {
+  if (completedOnIso) return 'Closed';
+  if (earliestDueDateIso) {
+    const due = new Date(earliestDueDateIso);
+    if (!Number.isNaN(due.getTime()) && due.getTime() < Date.now()) {
+      return 'Deadline Exceeded';
+    }
+  }
+  // Map common workflow codes to human text; fall back to numeric string.
+  if (rawStatus === 1 || rawStatus === '1') return 'Open';
+  if (rawStatus === 3 || rawStatus === '3') return 'Closed';
+  if (rawStatus === undefined || rawStatus === null || rawStatus === '') return '';
+  return String(rawStatus);
 }
 
 export function normalizeNcInstances(

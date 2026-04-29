@@ -4,8 +4,14 @@ import { get, set, del } from 'idb-keyval';
  * Bump this when any normalizer's output shape changes in a way that
  * would break older cached data. The cache loader treats older versions
  * as a miss and clears them so the next sync writes the new shape.
+ *
+ * History:
+ *   1 — initial
+ *   2 — NC Status field changed from numeric code ('1','3') to friendly text
+ *       ('Open','Closed','Deadline Exceeded'). Old caches would render wrong
+ *       Status badges, so wipe and re-sync.
  */
-export const CACHE_SCHEMA_VERSION = 1;
+export const CACHE_SCHEMA_VERSION = 2;
 
 const CACHE_KEY = 'bizzmine.cachedSync';
 
