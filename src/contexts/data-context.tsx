@@ -9,6 +9,7 @@ interface ChangeActionData { [key: string]: any; }
 interface NonConformanceData { [key: string]: any; }
 interface TrainingData { [key: string]: any; }
 interface BatchReleaseData { [key: string]: any; }
+interface BatchRegistryData { [key: string]: any; }
 interface DocumentKpiData { [key: string]: any; }
 interface ChangeKpiData { [key: string]: any; }
 
@@ -48,6 +49,7 @@ interface DataContextType {
   nonConformanceData: NonConformanceData[];
   trainingData: TrainingData[];
   batchReleaseData: BatchReleaseData[];
+  batchRegistryData: BatchRegistryData[];
   documentKpiData: DocumentKpiData[];
   changeKpiData: ChangeKpiData[];
   snapshots: MetricSnapshot[];
@@ -56,6 +58,7 @@ interface DataContextType {
   setNonConformanceData: React.Dispatch<React.SetStateAction<NonConformanceData[]>>;
   setTrainingData: React.Dispatch<React.SetStateAction<TrainingData[]>>;
   setBatchReleaseData: React.Dispatch<React.SetStateAction<BatchReleaseData[]>>;
+  setBatchRegistryData: React.Dispatch<React.SetStateAction<BatchRegistryData[]>>;
   setDocumentKpiData: React.Dispatch<React.SetStateAction<DocumentKpiData[]>>;
   setChangeKpiData: React.Dispatch<React.SetStateAction<ChangeKpiData[]>>;
   saveSnapshot: (metrics: MetricSnapshot['metrics']) => Promise<void>;
@@ -78,6 +81,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [nonConformanceData, setNonConformanceData] = useState<NonConformanceData[]>([]);
   const [trainingData, setTrainingData] = useState<TrainingData[]>([]);
   const [batchReleaseData, setBatchReleaseData] = useState<BatchReleaseData[]>([]);
+  const [batchRegistryData, setBatchRegistryData] = useState<BatchRegistryData[]>([]);
   const [documentKpiData, setDocumentKpiData] = useState<DocumentKpiData[]>([]);
   const [changeKpiData, setChangeKpiData] = useState<ChangeKpiData[]>([]);
   const [snapshots, setSnapshots] = useState<MetricSnapshot[]>([]);
@@ -128,9 +132,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         setChangeActionData(cached.collections.changeAction as any[]);
         setChangeKpiData(cached.collections.changes as any[]);
         setBatchReleaseData(cached.collections.batchRelease as any[]);
+        setBatchRegistryData(cached.collections.batchRegistry as any[]);
         setDocumentKpiData(cached.collections.documents as any[]);
         setTrainingData(cached.collections.training as any[]);
-        // batchRegistry has no dedicated state slot yet (Phase 4.2 introduces one)
       }
 
       // Prefer the cache's syncedAt over the localStorage timestamp — they
@@ -224,6 +228,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             cachePayload.collections.batchRelease = c.records;
             break;
           case 'batchRegistry':
+            setBatchRegistryData(c.records);
             cachePayload.collections.batchRegistry = c.records;
             break;
           case 'documents':
@@ -264,6 +269,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       nonConformanceData,
       trainingData,
       batchReleaseData,
+      batchRegistryData,
       documentKpiData,
       changeKpiData,
       snapshots,
@@ -272,6 +278,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setNonConformanceData,
       setTrainingData,
       setBatchReleaseData,
+      setBatchRegistryData,
       setDocumentKpiData,
       setChangeKpiData,
       saveSnapshot,
