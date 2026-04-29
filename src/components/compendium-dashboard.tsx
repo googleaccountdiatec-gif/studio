@@ -161,7 +161,15 @@ export default function CompendiumDashboard() {
     let capaEffectiveness = 0;
     let changeActions = 0;
     let training = 0;
-    let nonConformance = 0;
+    // NC has TWO different metrics that overlap:
+    //   ncDeadlineExceeded   = BizzMine's "Deadline Exceeded" — past NC_EarliestDueDate
+    //                          (the auto-computed earliest pending deadline for the
+    //                          record's current step) and not closed
+    //   ncInvestigationOverdue = past the investigation deadline specifically,
+    //                            regardless of current phase
+    // A record can be in either, both, or neither.
+    let ncDeadlineExceeded = 0;
+    let ncInvestigationOverdue = 0;
 
     // CAPA
     capaData.forEach(item => {
@@ -208,8 +216,7 @@ export default function CompendiumDashboard() {
         }
     });
 
-    // Non-Conformance — overdue if the investigation deadline has passed
-    // and the NC isn't closed yet, evaluated at referenceDate.
+    // Non-Conformance — two overlapping metrics
     nonConformanceData.forEach(item => {
         if (teamFilter === 'production') {
             const worker = item["Case Worker"];
@@ -217,18 +224,33 @@ export default function CompendiumDashboard() {
             if (!productionTeam.includes(worker) && !productionTeam.includes(registeredBy)) return;
         }
 
-        // Use the API's pre-computed Effective Deadline (NC_DeadlineInvestigation
-        // for any non-closed record) with fallback to legacy CSV field shape.
-        const deadlineStr =
+        // 1. Deadline Exceeded (BizzMine semantic): past NC_EarliestDueDate
+        const earliestDueStr = item['Earliest Due Date'] || item['NC_EarliestDueDate'];
+        if (isTaskOverdue(earliestDueStr, item['Completed On'], referenceDate)) {
+          ncDeadlineExceeded++;
+        }
+
+        // 2. Investigation Overdue: past investigation deadline regardless of phase
+        const investigationDeadlineStr =
           item['Effective Deadline']
           || item['Deadline for completing investigation']
-          || item['DeadlineInvestigation'];
-        if (isTaskOverdue(deadlineStr, item['Completed On'], referenceDate)) {
-            nonConformance++;
+          || item['NC_DeadlineInvestigation'];
+        if (isTaskOverdue(investigationDeadlineStr, item['Completed On'], referenceDate)) {
+          ncInvestigationOverdue++;
         }
     });
 
-    return { nonConformance, capaExecution, capaEffectiveness, changeActions, training };
+    return {
+      // Old saved snapshots only have the flat `nonConformance` field; keep it as
+      // the union of the two new metrics for legacy delta computations.
+      nonConformance: ncDeadlineExceeded,
+      ncDeadlineExceeded,
+      ncInvestigationOverdue,
+      capaExecution,
+      capaEffectiveness,
+      changeActions,
+      training,
+    };
   };
 
   // --- Documents in Flow Metrics ---
@@ -261,9 +283,12 @@ export default function CompendiumDashboard() {
   }), [capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam, qaFilter]);
 
   // --- Overdue Data (Current) for Chart ---
+  // NC shows two overlapping metrics: Deadline Exceeded (BizzMine's flag) and
+  // Investigation Overdue (past investigation deadline). A record can be in both.
   const overdueData = useMemo(() => {
     return [
-        { name: 'Non-Conformance', count: currentMetrics.nonConformance, fill: 'hsl(var(--chart-2))' },
+        { name: 'NC: Deadline Exceeded', count: currentMetrics.ncDeadlineExceeded, fill: 'hsl(var(--chart-2))' },
+        { name: 'NC: Investigation Overdue', count: currentMetrics.ncInvestigationOverdue, fill: 'hsl(35 90% 55%)' },
         { name: 'CAPA (Exec)', count: currentMetrics.capaExecution, fill: 'hsl(var(--chart-1))' },
         { name: 'CAPA (Eff)', count: currentMetrics.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
         { name: 'Change Actions', count: currentMetrics.changeActions, fill: 'hsl(var(--primary))' },
@@ -325,8 +350,14 @@ export default function CompendiumDashboard() {
         }
     }
 
+    // Old saved Firestore snapshots only have a flat `nonConformance` field.
+    // For new metrics fall back to 0 so deltas don't display NaN when
+    // comparing against legacy snapshots.
+    const pastNcDeadline = pastCounts.ncDeadlineExceeded ?? pastCounts.nonConformance ?? 0;
+    const pastNcInvestigation = pastCounts.ncInvestigationOverdue ?? 0;
     const deltas = [
-        { label: 'Non-Conformance', delta: currentMetrics.nonConformance - pastCounts.nonConformance, fill: 'hsl(var(--chart-2))' },
+        { label: 'NC: Deadline Exceeded', delta: currentMetrics.ncDeadlineExceeded - pastNcDeadline, fill: 'hsl(var(--chart-2))' },
+        { label: 'NC: Investigation Overdue', delta: currentMetrics.ncInvestigationOverdue - pastNcInvestigation, fill: 'hsl(35 90% 55%)' },
         { label: 'CAPA (Exec)', delta: currentMetrics.capaExecution - pastCounts.capaExecution, fill: 'hsl(var(--chart-1))' },
         { label: 'CAPA (Eff)', delta: currentMetrics.capaEffectiveness - pastCounts.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
         { label: 'Change Actions', delta: currentMetrics.changeActions - pastCounts.changeActions, fill: 'hsl(var(--primary))' },
@@ -528,18 +559,30 @@ export default function CompendiumDashboard() {
                             const name = data.name as string
                             const now = new Date()
                             let items: any[] = []
-                            if (name.includes('Non-Conformance')) {
+                            if (name.includes('NC:') || name.includes('Non-Conformance')) {
+                              const wantDeadlineExceeded = name.includes('Deadline Exceeded');
+                              const wantInvestigation = name.includes('Investigation Overdue');
                               items = (nonConformanceData as any[]).filter(d => {
                                 if (teamFilter === 'production') {
                                   if (!productionTeam.includes(d['Case Worker']) && !productionTeam.includes(d['Registered By'])) return false
                                 }
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'nc')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'nc')) return false
-                                // Use the same Effective Deadline + isTaskOverdue logic as the count computation
-                                const deadlineStr = d['Effective Deadline']
+
+                                const earliestDueStr = d['Earliest Due Date'] || d['NC_EarliestDueDate']
+                                const investigationDeadlineStr = d['Effective Deadline']
                                   || d['Deadline for completing investigation']
-                                  || d['DeadlineInvestigation']
-                                return isTaskOverdue(deadlineStr, d['Completed On'], now)
+                                  || d['NC_DeadlineInvestigation']
+
+                                if (wantDeadlineExceeded) {
+                                  return isTaskOverdue(earliestDueStr, d['Completed On'], now)
+                                }
+                                if (wantInvestigation) {
+                                  return isTaskOverdue(investigationDeadlineStr, d['Completed On'], now)
+                                }
+                                // Legacy 'Non-Conformance' (no specific suffix) — show union of both
+                                return isTaskOverdue(earliestDueStr, d['Completed On'], now)
+                                    || isTaskOverdue(investigationDeadlineStr, d['Completed On'], now)
                               })
                             } else if (name.includes('CAPA') && name.includes('Exec')) {
                               items = (capaData as any[]).filter(d => {
@@ -581,7 +624,7 @@ export default function CompendiumDashboard() {
                                 return isTaskOverdue(d['Deadline for completing training'], d['Completed On'], now)
                               })
                             }
-                            const category = name.includes('Non-Conformance') ? 'nc'
+                            const category = (name.includes('NC:') || name.includes('Non-Conformance')) ? 'nc'
                               : name.includes('CAPA') ? 'capa'
                               : name.includes('Change') ? 'change-action'
                               : name.includes('Training') ? 'training' : 'unknown'
