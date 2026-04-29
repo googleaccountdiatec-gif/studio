@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { BizzmineClient } from '@/lib/bizzmine/client';
 import { COLLECTION_CODES, type CollectionKey } from '@/lib/bizzmine/config';
 import { normalizeCapaInstances } from '@/lib/bizzmine/normalize/capa';
+import { normalizeNcInstances } from '@/lib/bizzmine/normalize/nc';
+import { normalizeChangeActionInstances } from '@/lib/bizzmine/normalize/change-actions';
+import { normalizeChangeInstances } from '@/lib/bizzmine/normalize/changes';
+import { normalizeBatchReleaseInstances } from '@/lib/bizzmine/normalize/batch-release';
+import { normalizeBatchRegistryInstances } from '@/lib/bizzmine/normalize/batch-registry';
+import { normalizeDocumentInstances } from '@/lib/bizzmine/normalize/documents';
+import { normalizeTrainingInstances } from '@/lib/bizzmine/normalize/training';
 import { fetchStepMap, type StepMap } from '@/lib/bizzmine/steps';
 import {
   harvestUsersFromRecords,
@@ -22,6 +29,10 @@ interface SyncResultPerCollection {
   ok: boolean;
   error?: string;
   records?: unknown[];
+  /** When this collection's records were merged into another (e.g. A007 -> A004). */
+  mergedInto?: string;
+  /** Raw count of records before merging (informational). */
+  mergedSourceCount?: number;
 }
 
 interface FetchResult {
@@ -74,16 +85,22 @@ export async function POST() {
   const keys = Object.keys(COLLECTION_CODES) as CollectionKey[];
 
   // 1. Fetch every collection in parallel (capped concurrency).
-  //    In parallel, fetch the CAPA step map so PendingSteps IDs can be
-  //    resolved to human-readable names + classified into phases.
-  //    Future Phase 3 normalizers (NC, Change_Actions, etc.) will fetch
-  //    their own step maps the same way.
-  const [fetched, capaStepMap] = await Promise.all([
-    runWithConcurrency(keys, fetchOne, CONCURRENCY),
-    fetchStepMap(COLLECTION_CODES.capa).catch((e) => {
-      console.error('CAPA step map fetch failed (records will fall back to ID strings):', e);
+  //    In parallel, fetch step maps for collections whose normalizers
+  //    need them (CAPA, NC). Future Phase 3 normalizers add their codes
+  //    to this list.
+  const stepMapFetcher = (code: string) =>
+    fetchStepMap(code).catch((e) => {
+      console.error(`${code} step map fetch failed (records will fall back to ID strings):`, e);
       return undefined as StepMap | undefined;
-    }),
+    });
+
+  const [fetched, capaStepMap, ncStepMap, caStepMap, cmStepMap, dcStepMap] = await Promise.all([
+    runWithConcurrency(keys, fetchOne, CONCURRENCY),
+    stepMapFetcher(COLLECTION_CODES.capa),
+    stepMapFetcher(COLLECTION_CODES.nc),
+    stepMapFetcher(COLLECTION_CODES.changeActions),
+    stepMapFetcher(COLLECTION_CODES.changes),
+    stepMapFetcher(COLLECTION_CODES.documents),
   ]);
 
   // 2. Build harvest source from RAW records (before normalization strips OrgChart)
@@ -123,6 +140,89 @@ export async function POST() {
         ok: true,
         records: normalizeCapaInstances(f.raw, capaStepMap),
       };
+    }
+    if (f.key === 'nc') {
+      return {
+        code: f.code,
+        count: f.raw.length,
+        normalized: true,
+        ok: true,
+        records: normalizeNcInstances(f.raw, ncStepMap),
+      };
+    }
+    if (f.key === 'changeActions') {
+      return {
+        code: f.code,
+        count: f.raw.length,
+        normalized: true,
+        ok: true,
+        records: normalizeChangeActionInstances(f.raw, caStepMap),
+      };
+    }
+    if (f.key === 'changes') {
+      return {
+        code: f.code,
+        count: f.raw.length,
+        normalized: true,
+        ok: true,
+        records: normalizeChangeInstances(f.raw, cmStepMap),
+      };
+    }
+    if (f.key === 'batchRelease') {
+      return {
+        code: f.code,
+        count: f.raw.length,
+        normalized: true,
+        ok: true,
+        records: normalizeBatchReleaseInstances(f.raw),
+      };
+    }
+    if (f.key === 'batchRegistry') {
+      return {
+        code: f.code,
+        count: f.raw.length,
+        normalized: true,
+        ok: true,
+        records: normalizeBatchRegistryInstances(f.raw),
+      };
+    }
+    if (f.key === 'documents') {
+      return {
+        code: f.code,
+        count: f.raw.length,
+        normalized: true,
+        ok: true,
+        records: normalizeDocumentInstances(f.raw, dcStepMap),
+      };
+    }
+    if (f.key === 'training') {
+      // Merge A004 (regular) + A007 (introduction) into one stream.
+      // A007's per-collection entry is emitted below as { records: [], merged: true }
+      // so the client knows not to ingest it separately.
+      const a007 = fetched.find((x) => x.key === 'introTraining');
+      const merged = normalizeTrainingInstances(f.raw, a007?.raw ?? []);
+      return {
+        code: f.code,
+        count: merged.length,
+        normalized: true,
+        ok: true,
+        records: merged,
+      };
+    }
+    if (f.key === 'introTraining') {
+      // Already merged into the 'training' result above. Emit count 0
+      // and empty records so the client doesn't double-ingest into a
+      // separate slot. The raw count is preserved in 'mergedInto' for
+      // sanity checking the merge.
+      return {
+        code: f.code,
+        count: 0,
+        normalized: true,
+        ok: true,
+        records: [],
+        mergedInto: COLLECTION_CODES.training,
+        mergedSourceCount: f.raw.length,
+      } as SyncResultPerCollection;
     }
     return {
       code: f.code,
