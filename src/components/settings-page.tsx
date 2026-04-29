@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { GlassCard } from '@/components/ui/glass-card';
+import { BizzmineConnectionPanel } from '@/components/bizzmine-connection-panel';
 
 export default function SettingsPage() {
   const [team, setTeam] = useState<string[]>([]);
@@ -75,6 +76,7 @@ export default function SettingsPage() {
           <div className="absolute top-[40%] left-[30%] w-[400px] h-[400px] bg-secondary/30 rounded-full blur-[80px] animate-mist opacity-40" style={{ animationDelay: '-5s', animationDuration: '15s' }} />
        </div>
 
+       <BizzmineConnectionPanel />
        <GlassCard className="w-full max-w-2xl p-8 z-10">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
