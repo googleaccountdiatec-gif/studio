@@ -43,3 +43,6 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+
+# BizzMine API documentation & temporary keys (do NOT commit)
+/api/
