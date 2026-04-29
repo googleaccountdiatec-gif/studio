@@ -60,7 +60,11 @@ export default function CapaDashboard() {
 
     if (phaseFilter !== 'all') {
       baseData = baseData.filter(item => {
-        const isEffectiveness = item['Pending Steps']?.toLowerCase().includes('effectiveness');
+        // Prefer the API's structured Phase; fall back to substring match for legacy data shape
+        const phase = item.Phase as string | undefined;
+        const isEffectiveness = phase
+          ? phase === 'effectiveness'
+          : item['Pending Steps']?.toLowerCase().includes('effectiveness');
         return phaseFilter === 'effectiveness' ? isEffectiveness : !isEffectiveness;
       });
     }
@@ -70,8 +74,14 @@ export default function CapaDashboard() {
     }
 
     return baseData.map(item => {
-      const isEffectivenessStep = item['Pending Steps']?.toLowerCase().includes('effectiveness');
-      const dateString = isEffectivenessStep ? item['Deadline for effectiveness check'] : item['Due Date'];
+      // Prefer the API's pre-computed Effective Deadline; fall back to legacy derivation
+      const phase = item.Phase as string | undefined;
+      const isEffectivenessStep = phase
+        ? phase === 'effectiveness'
+        : item['Pending Steps']?.toLowerCase().includes('effectiveness');
+      const dateString =
+        item['Effective Deadline']
+        || (isEffectivenessStep ? item['Deadline for effectiveness check'] : item['Due Date']);
 
       const effectiveDueDate = parseDate(dateString);
 
@@ -121,12 +131,18 @@ export default function CapaDashboard() {
     }
 
     trendData.forEach(item => {
-        const pending = (item['Pending Steps'] || '').trim().toLowerCase();
-        const isEffPhase = pending.includes('effectiveness');
+        // Prefer API's pre-computed Effective Deadline; fall back to derivation from Phase / Pending Steps
+        const phase = item.Phase as string | undefined;
+        const isEffPhase = phase
+          ? phase === 'effectiveness'
+          : (item['Pending Steps'] || '').trim().toLowerCase().includes('effectiveness');
 
-        const effectiveDeadline = isEffPhase
-          ? parseDate(item['Deadline for effectiveness check'] || item['Due Date'])
-          : parseDate(item['Due Date']);
+        const effectiveDeadlineStr =
+          item['Effective Deadline']
+          || (isEffPhase
+            ? (item['Deadline for effectiveness check'] || item['Due Date'])
+            : item['Due Date']);
+        const effectiveDeadline = parseDate(effectiveDeadlineStr);
         const completedOn = parseDate(item['Completed On']);
 
         if (!isValid(effectiveDeadline)) return;

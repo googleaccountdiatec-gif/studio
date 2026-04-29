@@ -169,10 +169,18 @@ export default function CompendiumDashboard() {
        const pendingSteps = item['Pending Steps']?.trim() || "";
        if (qaFilter === 'qa' && !isQaStep(pendingSteps, 'capa')) return;
        if (qaFilter === 'non-qa' && isQaStep(pendingSteps, 'capa')) return;
-       const isEffectiveness = pendingSteps.toLowerCase().includes('effectiveness');
-       const deadlineStr = isEffectiveness
-         ? (item['Deadline for effectiveness check'] || item['Due Date'])
-         : item['Due Date'];
+
+       // Prefer API's structured Phase; fall back to substring match for legacy data shape
+       const phase = (item as any).Phase as string | undefined;
+       const isEffectiveness = phase
+         ? phase === 'effectiveness'
+         : pendingSteps.toLowerCase().includes('effectiveness');
+
+       const deadlineStr =
+         item['Effective Deadline']
+         || (isEffectiveness
+           ? (item['Deadline for effectiveness check'] || item['Due Date'])
+           : item['Due Date']);
 
        if (isTaskOverdue(deadlineStr, item['Completed On'], referenceDate)) {
            if (isEffectiveness) capaEffectiveness++;
@@ -527,8 +535,11 @@ export default function CompendiumDashboard() {
                                 const pendingSteps = (d['Pending Steps']?.trim() || '').toLowerCase()
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'capa')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'capa')) return false
-                                if (pendingSteps.includes('effectiveness')) return false
-                                return isTaskOverdue(d['Due Date'], d['Completed On'], now)
+                                // Prefer API's structured Phase; fall back to substring match for legacy data
+                                const phase = d.Phase as string | undefined;
+                                const isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.includes('effectiveness');
+                                if (isEffectiveness) return false
+                                return isTaskOverdue(d['Effective Deadline'] || d['Due Date'], d['Completed On'], now)
                               })
                             } else if (name.includes('CAPA') && name.includes('Eff')) {
                               items = (capaData as any[]).filter(d => {
@@ -536,8 +547,11 @@ export default function CompendiumDashboard() {
                                 const pendingSteps = (d['Pending Steps'] || '').trim()
                                 if (qaFilter === 'qa' && !isQaStep(pendingSteps, 'capa')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(pendingSteps, 'capa')) return false
-                                if (!pendingSteps.toLowerCase().includes('effectiveness')) return false
-                                const deadlineStr = d['Deadline for effectiveness check'] || d['Due Date']
+                                // Prefer API's structured Phase; fall back to substring match
+                                const phase = d.Phase as string | undefined;
+                                const isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.toLowerCase().includes('effectiveness');
+                                if (!isEffectiveness) return false
+                                const deadlineStr = d['Effective Deadline'] || d['Deadline for effectiveness check'] || d['Due Date']
                                 return isTaskOverdue(deadlineStr, d['Completed On'], now)
                               })
                             } else if (name.includes('Change')) {
@@ -834,12 +848,20 @@ export default function CompendiumDashboard() {
                   }},
                   { key: 'assignee', header: 'Assigned To', cell: (row: any) => row['Assigned To'] || '' },
                   { key: 'phase', header: 'Phase', cell: (row: any) => {
-                    const steps = (row['Pending Steps'] || '').toLowerCase();
-                    return <Badge variant="outline">{steps.includes('effectiveness') ? 'Effectiveness' : 'Execution'}</Badge>;
+                    // Prefer the API's structured Phase; fall back to substring match
+                    const phase = row.Phase as string | undefined;
+                    const isEff = phase
+                      ? phase === 'effectiveness'
+                      : (row['Pending Steps'] || '').toLowerCase().includes('effectiveness');
+                    return <Badge variant="outline">{isEff ? 'Effectiveness' : 'Execution'}</Badge>;
                   }},
                   { key: 'deadline', header: 'Deadline', cell: (row: any) => {
-                    const steps = (row['Pending Steps'] || '').toLowerCase();
-                    return steps.includes('effectiveness')
+                    if (row['Effective Deadline']) return row['Effective Deadline'];
+                    const phase = row.Phase as string | undefined;
+                    const isEff = phase
+                      ? phase === 'effectiveness'
+                      : (row['Pending Steps'] || '').toLowerCase().includes('effectiveness');
+                    return isEff
                       ? (row['Deadline for effectiveness check'] || row['Due Date'] || '')
                       : (row['Due Date'] || '');
                   }},

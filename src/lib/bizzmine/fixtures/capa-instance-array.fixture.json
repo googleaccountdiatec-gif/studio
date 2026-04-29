@@ -1,0 +1,44 @@
+[
+  {
+    "CAPA_Tittle": "Sample CAPA title",
+    "CAPA_CAPAID": 1.0,
+    "CAPA_DueDate": "3/31/2022 12:00:00 AM +00:00",
+    "CAPA_AssignedTo": [{ "type": 1, "id": 12, "value": "Test User Alpha" }],
+    "CAPA_Priority": { "value": 64, "text": "Normal" },
+    "CAPA_PendingSteps": "",
+    "CAPA_CompletedOn": "11/24/2022 7:22:17 PM +00:00",
+    "CAPA_Deadlineforeffectivenesscheck": "",
+    "CAPA_Category": { "value": 193, "text": "System /process" },
+    "CAPA_Actiontaken": { "value": 423, "text": "Action performed" },
+    "CAPA_ExpectedresultsofAction": "<div>Description</div>",
+    "CAPA_Description": "[REDACTED]",
+    "CAPA_Plan": "<p>[REDACTED]</p>",
+    "CAPA_RegistrationTime": "1/24/2022 12:48:45 PM +00:00",
+    "CAPA_RegisteredBy": [{ "type": 1, "id": 12, "value": "Test User Alpha" }],
+    "CAPA_RegisteredOnBehalfOf": [{ "type": 1, "id": 12, "value": "Test User Alpha" }],
+    "CAPA_Proposedresponsible": [{ "type": 1, "id": 14, "value": "Test User Beta" }],
+    "NonConformances": [
+      { "NonConformances_NC_Title": "Linked NC", "NonConformances_NC_NonConformanceID": 3.0 }
+    ]
+  },
+  {
+    "CAPA_Tittle": "Second CAPA",
+    "CAPA_CAPAID": 2.0,
+    "CAPA_DueDate": "5/15/2024 12:00:00 AM +00:00",
+    "CAPA_AssignedTo": [{ "type": 1, "id": 84, "value": "Test User Gamma" }],
+    "CAPA_Priority": { "value": 63, "text": "High" },
+    "CAPA_PendingSteps": "CAPA Execution",
+    "CAPA_CompletedOn": "",
+    "CAPA_Deadlineforeffectivenesscheck": "8/15/2024 12:00:00 AM +00:00",
+    "CAPA_Category": { "value": 191, "text": "Personnel" },
+    "CAPA_Actiontaken": "",
+    "CAPA_ExpectedresultsofAction": "",
+    "CAPA_Description": "[REDACTED]",
+    "CAPA_Plan": "",
+    "CAPA_RegistrationTime": "5/1/2024 9:30:00 AM +00:00",
+    "CAPA_RegisteredBy": [{ "type": 1, "id": 14, "value": "Test User Beta" }],
+    "CAPA_RegisteredOnBehalfOf": [{ "type": 1, "id": 14, "value": "Test User Beta" }],
+    "CAPA_Proposedresponsible": [{ "type": 2, "id": 99, "value": "QA Team" }],
+    "NonConformances": []
+  }
+]
