@@ -9,9 +9,17 @@ import TrainingDashboard from "@/components/training-dashboard";
 import BatchReleaseDashboard from "@/components/batch-release-dashboard";
 import CompendiumDashboard from "@/components/compendium-dashboard";
 import SettingsPage from "@/components/settings-page";
-import { MultiUploader } from "@/components/multi-uploader";
 import DocumentsInFlowDashboard from "@/components/documents-in-flow-dashboard";
+import { SyncNowButton } from "@/components/sync-now-button";
+import { BizzmineEmptyState } from "@/components/bizzmine-empty-state";
+import { useData } from "@/contexts/data-context";
 import Image from 'next/image';
+
+function DashboardSlot({ children }: { children: React.ReactNode }) {
+  const { hasEverSynced } = useData();
+  if (!hasEverSynced) return <BizzmineEmptyState />;
+  return <>{children}</>;
+}
 
 export default function Home() {
   return (
@@ -22,7 +30,7 @@ export default function Home() {
             <Image src="/logo.png" alt="Company Logo" width={120} height={120} />
             <h1 className="text-xl font-semibold tracking-tight text-primary">KPI Insights</h1>
           </div>
-          <MultiUploader />
+          <SyncNowButton />
         </header>
 
         <main className="flex-1 p-4 sm:p-6 space-y-6">
@@ -40,28 +48,28 @@ export default function Home() {
             </TabsList>
 
             <TabsContent value="overview">
-              <CompendiumDashboard />
+              <DashboardSlot><CompendiumDashboard /></DashboardSlot>
             </TabsContent>
             <TabsContent value="batch-release">
-              <BatchReleaseDashboard />
+              <DashboardSlot><BatchReleaseDashboard /></DashboardSlot>
             </TabsContent>
             <TabsContent value="capa">
-              <CapaDashboard />
+              <DashboardSlot><CapaDashboard /></DashboardSlot>
             </TabsContent>
             <TabsContent value="changes">
-              <ChangesDashboard />
+              <DashboardSlot><ChangesDashboard /></DashboardSlot>
             </TabsContent>
             <TabsContent value="change-action">
-              <ChangeActionDashboard />
+              <DashboardSlot><ChangeActionDashboard /></DashboardSlot>
             </TabsContent>
             <TabsContent value="documents-in-flow">
-              <DocumentsInFlowDashboard />
+              <DashboardSlot><DocumentsInFlowDashboard /></DashboardSlot>
             </TabsContent>
             <TabsContent value="non-conformance">
-               <NonConformanceDashboard />
+              <DashboardSlot><NonConformanceDashboard /></DashboardSlot>
             </TabsContent>
             <TabsContent value="training">
-               <TrainingDashboard />
+              <DashboardSlot><TrainingDashboard /></DashboardSlot>
             </TabsContent>
             <TabsContent value="settings">
               <SettingsPage />
