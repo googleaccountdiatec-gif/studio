@@ -9,16 +9,20 @@ import { resolveStepName, type StepMap } from '../steps';
 import type { RawInstance, SubCollectionEntry } from '../types';
 
 /**
- * NC workflow phases (per BizzMine instruction file §8.1):
+ * NC workflow phases. Current workflow (per BizzMine instruction file §8.1):
  *   Registration -> NC Gateway1 -> Classification -> NC Gateway2 ->
  *   Investigation and root cause analysis -> Technical verification ->
  *   NC Gateway4 -> QA approval -> NC Gateway5 -> Stop
+ *
+ * Older workflow revisions also surface in the data with numbered steps
+ * like "7. Effectiveness Check & Closing" — those map to 'closing'.
  */
 export type NcPhase =
   | 'registration'   // Registration, Classification, any Gateway
   | 'investigation'  // Investigation and root cause analysis
   | 'verification'   // Technical verification
   | 'qa_approval'    // QA approval
+  | 'closing'        // Effectiveness Check & Closing (legacy workflow step)
   | 'closed'         // CompletedOn set OR no pending step
   | 'other';
 
@@ -29,7 +33,10 @@ export function classifyNcPhase(stepName: string, completedOnIso: string): NcPha
   const lower = trimmed.toLowerCase();
   if (lower.includes('investigation') || lower.includes('root cause')) return 'investigation';
   if (lower.includes('verification')) return 'verification';
-  if (lower.includes('qa approval') || lower.includes('approval')) return 'qa_approval';
+  if (lower.includes('qa approval')) return 'qa_approval';
+  // 'Effectiveness Check & Closing' / 'Closing' steps from older workflow revisions
+  if (lower.includes('closing') || lower.includes('effectiveness check')) return 'closing';
+  if (lower.includes('approval')) return 'qa_approval';
   if (
     lower.includes('registration') ||
     lower.includes('classification') ||
@@ -110,10 +117,12 @@ export function normalizeNcRecord(raw: RawInstance, stepMap?: StepMap): Normaliz
   const phase = classifyNcPhase(pendingStepName, completedOnIso);
 
   const deadlineInvestigation = toIsoDate(raw.NC_DeadlineInvestigation);
-  const effective =
-    phase === 'investigation' || phase === 'registration'
-      ? deadlineInvestigation
-      : '';
+  // Effective Deadline = investigation deadline for any NOT-yet-closed record.
+  // (Originally only set for registration/investigation phases, which missed
+  // records that are past their deadline but already advanced to verification
+  // or QA approval — those are exactly the records that should still flag
+  // as overdue until the NC is fully closed.)
+  const effective = phase === 'closed' ? '' : deadlineInvestigation;
 
   // Status: EnumList numeric code; emit as string for now (dashboards rarely
   // depend on specific text values, and resolving the EnumList lookup is a

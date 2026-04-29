@@ -208,7 +208,8 @@ export default function CompendiumDashboard() {
         }
     });
 
-    // Non-Conformance
+    // Non-Conformance — overdue if the investigation deadline has passed
+    // and the NC isn't closed yet, evaluated at referenceDate.
     nonConformanceData.forEach(item => {
         if (teamFilter === 'production') {
             const worker = item["Case Worker"];
@@ -216,9 +217,14 @@ export default function CompendiumDashboard() {
             if (!productionTeam.includes(worker) && !productionTeam.includes(registeredBy)) return;
         }
 
-        const isCurrentSnapshot = Math.abs(referenceDate.getTime() - new Date().getTime()) < 86400000;
-        if (isCurrentSnapshot) {
-            if (item['Status'] === 'Deadline Exceeded') nonConformance++;
+        // Use the API's pre-computed Effective Deadline (NC_DeadlineInvestigation
+        // for any non-closed record) with fallback to legacy CSV field shape.
+        const deadlineStr =
+          item['Effective Deadline']
+          || item['Deadline for completing investigation']
+          || item['DeadlineInvestigation'];
+        if (isTaskOverdue(deadlineStr, item['Completed On'], referenceDate)) {
+            nonConformance++;
         }
     });
 
@@ -527,7 +533,13 @@ export default function CompendiumDashboard() {
                                 if (teamFilter === 'production') {
                                   if (!productionTeam.includes(d['Case Worker']) && !productionTeam.includes(d['Registered By'])) return false
                                 }
-                                return d['Status'] === 'Deadline Exceeded'
+                                if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'nc')) return false
+                                if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'nc')) return false
+                                // Use the same Effective Deadline + isTaskOverdue logic as the count computation
+                                const deadlineStr = d['Effective Deadline']
+                                  || d['Deadline for completing investigation']
+                                  || d['DeadlineInvestigation']
+                                return isTaskOverdue(deadlineStr, d['Completed On'], now)
                               })
                             } else if (name.includes('CAPA') && name.includes('Exec')) {
                               items = (capaData as any[]).filter(d => {

@@ -119,6 +119,11 @@ describe('normalizeNcRecord — step ID resolution + Phase', () => {
     expect(classifyNcPhase('NC Gateway5', '')).toBe('registration');
   });
 
+  it('classifies "Effectiveness Check & Closing" / "Closing" (legacy workflow) as "closing"', () => {
+    expect(classifyNcPhase('7. Effectiveness Check & Closing', '')).toBe('closing');
+    expect(classifyNcPhase('Closing', '')).toBe('closing');
+  });
+
   it('marks closed when CompletedOn is set OR pending step is empty', () => {
     expect(classifyNcPhase('Investigation and root cause analysis', '2024-01-01T00:00:00.000Z')).toBe('closed');
     expect(classifyNcPhase('', '')).toBe('closed');
@@ -137,7 +142,7 @@ describe('normalizeNcRecord — step ID resolution + Phase', () => {
 });
 
 describe('normalizeNcRecord — Effective Deadline', () => {
-  it('uses DeadlineInvestigation in investigation/registration phase', () => {
+  it('uses DeadlineInvestigation in investigation phase', () => {
     const raw: RawInstance = {
       ...sampleNc,
       NC_PendingSteps: 1670,
@@ -146,6 +151,30 @@ describe('normalizeNcRecord — Effective Deadline', () => {
     };
     const r = normalizeNcRecord(raw, ncStepMap);
     expect(r['Effective Deadline']).toBe('2025-05-01T00:00:00.000Z');
+  });
+
+  it('uses DeadlineInvestigation in qa_approval / verification phases too (NC overdue applies until closed)', () => {
+    const raw: RawInstance = {
+      ...sampleNc,
+      NC_PendingSteps: 1673, // QA approval
+      NC_DeadlineInvestigation: '5/1/2025 12:00:00 AM +00:00',
+      NC_CompletedOn: '',
+    };
+    const r = normalizeNcRecord(raw, ncStepMap);
+    expect(r['Phase']).toBe('qa_approval');
+    expect(r['Effective Deadline']).toBe('2025-05-01T00:00:00.000Z');
+  });
+
+  it('returns empty string for closed records', () => {
+    const raw: RawInstance = {
+      ...sampleNc,
+      NC_PendingSteps: '',
+      NC_DeadlineInvestigation: '5/1/2025 12:00:00 AM +00:00',
+      NC_CompletedOn: '2/28/2022 11:35:00 AM +00:00',
+    };
+    const r = normalizeNcRecord(raw, ncStepMap);
+    expect(r['Phase']).toBe('closed');
+    expect(r['Effective Deadline']).toBe('');
   });
 
   it('returns empty string when no deadline available and not closed', () => {
