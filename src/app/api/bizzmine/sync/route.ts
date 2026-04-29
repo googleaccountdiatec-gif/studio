@@ -5,6 +5,7 @@ import { normalizeCapaInstances } from '@/lib/bizzmine/normalize/capa';
 import { normalizeNcInstances } from '@/lib/bizzmine/normalize/nc';
 import { normalizeChangeActionInstances } from '@/lib/bizzmine/normalize/change-actions';
 import { normalizeChangeInstances } from '@/lib/bizzmine/normalize/changes';
+import { normalizeBatchReleaseInstances } from '@/lib/bizzmine/normalize/batch-release';
 import { fetchStepMap, type StepMap } from '@/lib/bizzmine/steps';
 import {
   harvestUsersFromRecords,
@@ -157,6 +158,15 @@ export async function POST() {
         normalized: true,
         ok: true,
         records: normalizeChangeInstances(f.raw, cmStepMap),
+      };
+    }
+    if (f.key === 'batchRelease') {
+      return {
+        code: f.code,
+        count: f.raw.length,
+        normalized: true,
+        ok: true,
+        records: normalizeBatchReleaseInstances(f.raw),
       };
     }
     return {
