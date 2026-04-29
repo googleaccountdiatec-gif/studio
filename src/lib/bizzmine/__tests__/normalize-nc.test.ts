@@ -74,9 +74,62 @@ describe('normalizeNcRecord — base mapping', () => {
     expect(r['Repeated operation/analysis']).toBe('');
   });
 
-  it('emits a string Status (numeric code passthrough — EnumList resolution is a follow-up)', () => {
+  it('emits a friendly Status label ("Closed" for completed records)', () => {
     const r = normalizeNcRecord(sampleNc);
-    expect(r['Status']).toBe('3');
+    expect(r['Status']).toBe('Closed');
+  });
+});
+
+describe('NC Status label derivation', () => {
+  it('returns "Closed" when CompletedOn is set, regardless of status code', () => {
+    const r = normalizeNcRecord({
+      ...sampleNc,
+      NC_Status: 1,
+      NC_CompletedOn: '2/28/2022 11:35:00 AM +00:00',
+    });
+    expect(r['Status']).toBe('Closed');
+  });
+
+  it('returns "Deadline Exceeded" when not closed and Earliest Due Date is past', () => {
+    const r = normalizeNcRecord({
+      ...sampleNc,
+      NC_Status: 1,
+      NC_CompletedOn: '',
+      NC_EarliestDueDate: '1/1/2020 12:00:00 AM +00:00', // long past
+    });
+    expect(r['Status']).toBe('Deadline Exceeded');
+  });
+
+  it('returns "Open" when status code is 1 and deadline is in the future', () => {
+    const r = normalizeNcRecord({
+      ...sampleNc,
+      NC_Status: 1,
+      NC_CompletedOn: '',
+      NC_EarliestDueDate: '1/1/2099 12:00:00 AM +00:00', // far future
+      NC_DeadlineInvestigation: '',
+    });
+    expect(r['Status']).toBe('Open');
+  });
+
+  it('returns "Open" when status code is 1 and no deadline is set', () => {
+    const r = normalizeNcRecord({
+      ...sampleNc,
+      NC_Status: 1,
+      NC_CompletedOn: '',
+      NC_EarliestDueDate: '',
+      NC_DeadlineInvestigation: '',
+    });
+    expect(r['Status']).toBe('Open');
+  });
+
+  it('returns "Closed" for status code 3 even when CompletedOn is empty (defensive)', () => {
+    const r = normalizeNcRecord({
+      ...sampleNc,
+      NC_Status: 3,
+      NC_CompletedOn: '',
+      NC_EarliestDueDate: '',
+    });
+    expect(r['Status']).toBe('Closed');
   });
 });
 
