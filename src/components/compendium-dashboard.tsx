@@ -6,7 +6,7 @@ import { GlassCard } from '@/components/ui/glass-card';
 import { isValid, getQuarter, subWeeks, format } from 'date-fns';
 import { parseDate } from '@/lib/date-utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts';
-import { getProductionTeam } from '@/lib/teams';
+import { getProductionTeam, isInTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
 import { ArrowUp, ArrowDown, Minus, History } from 'lucide-react';
@@ -75,9 +75,7 @@ export default function CompendiumDashboard() {
 
     nonConformanceData.forEach(item => {
       if (teamFilter === 'production') {
-          const worker = item["Case Worker"];
-          const registeredBy = item["Registered By"];
-          if (!productionTeam.includes(worker) && !productionTeam.includes(registeredBy)) {
+          if (!isInTeam(item["Case Worker"], productionTeam) && !isInTeam(item["Registered By"], productionTeam)) {
               return;
           }
       }
@@ -140,7 +138,7 @@ export default function CompendiumDashboard() {
     // the previous all-Phase routing put ~12 recently-closed CAPAs into the
     // wrong bucket because Phase='closed' fell through to the exec branch.
     capaData.forEach(item => {
-       if (teamFilter === 'production' && !productionTeam.includes(item['Assigned To'])) return;
+       if (teamFilter === 'production' && !isInTeam(item['Assigned To'], productionTeam)) return;
        const pendingSteps = item['Pending Steps']?.trim() || "";
        if (qaFilter === 'qa' && !isQaStep(pendingSteps, 'capa')) return;
        if (qaFilter === 'non-qa' && isQaStep(pendingSteps, 'capa')) return;
@@ -173,7 +171,7 @@ export default function CompendiumDashboard() {
 
     // Change Actions
     changeActionData.forEach(item => {
-        if (teamFilter === 'production' && !productionTeam.includes(item['Responsible'])) return;
+        if (teamFilter === 'production' && !isInTeam(item['Responsible'], productionTeam)) return;
         if (qaFilter === 'qa' && !isQaStep(item['Pending Steps'] || '', 'change-action')) return;
         if (qaFilter === 'non-qa' && isQaStep(item['Pending Steps'] || '', 'change-action')) return;
         if (wasOpenAndOverdueValues(referenceDate, item['Deadline'], item['Completed On'], item['Registration Time'])) {
@@ -183,7 +181,7 @@ export default function CompendiumDashboard() {
 
     // Training
     trainingData.forEach(item => {
-        if (teamFilter === 'production' && !productionTeam.includes(item['Trainee'])) return;
+        if (teamFilter === 'production' && !isInTeam(item['Trainee'], productionTeam)) return;
         if (qaFilter === 'qa' && !isQaStep(item['Pending Steps'] || '', 'training')) return;
         if (qaFilter === 'non-qa' && isQaStep(item['Pending Steps'] || '', 'training')) return;
         if (wasOpenAndOverdueValues(referenceDate, item['Deadline for completing training'], item['Completed On'], item['Registration Time'])) {
@@ -194,9 +192,7 @@ export default function CompendiumDashboard() {
     // Non-Conformance — two overlapping metrics
     nonConformanceData.forEach(item => {
         if (teamFilter === 'production') {
-            const worker = item["Case Worker"];
-            const registeredBy = item["Registered By"];
-            if (!productionTeam.includes(worker) && !productionTeam.includes(registeredBy)) return;
+            if (!isInTeam(item["Case Worker"], productionTeam) && !isInTeam(item["Registered By"], productionTeam)) return;
         }
 
         // 1. Deadline Exceeded (BizzMine semantic): past NC_EarliestDueDate
@@ -232,7 +228,7 @@ export default function CompendiumDashboard() {
   // --- Documents in Flow Metrics ---
   const getDocumentsInFlowMetrics = (): DocumentsInFlowMetrics => {
     const documentsInFlow = documentKpiData.filter(doc => {
-        if (teamFilter === 'production' && !productionTeam.includes(doc['Responsible'])) {
+        if (teamFilter === 'production' && !isInTeam(doc['Responsible'], productionTeam)) {
             return false;
         }
         return doc['Pending Steps'] && doc['Pending Steps'].trim() !== '';
@@ -280,7 +276,7 @@ export default function CompendiumDashboard() {
   // completion date — that's rare in practice.
   const getDocumentsInFlowAtRefDate = (refDate: Date): DocumentsInFlowMetrics => {
     const docs = documentKpiData.filter(doc => {
-        if (teamFilter === 'production' && !productionTeam.includes(doc['Responsible'])) return false;
+        if (teamFilter === 'production' && !isInTeam(doc['Responsible'], productionTeam)) return false;
 
         const reg = parseDate(doc['Registration Time']);
         if (isValid(reg) && reg.getTime() > refDate.getTime()) return false;
@@ -389,7 +385,7 @@ export default function CompendiumDashboard() {
 
   const handleDocFlowDrill = (type: 'total' | 'major' | 'minor' | 'new') => {
     const docs = documentKpiData.filter(doc => {
-      if (teamFilter === 'production' && !productionTeam.includes(doc['Responsible'])) return false;
+      if (teamFilter === 'production' && !isInTeam(doc['Responsible'], productionTeam)) return false;
       if (!doc['Pending Steps'] || doc['Pending Steps'].trim() === '') return false;
       if (type === 'total') return true;
       const flow = (doc['Document Flow'] || '').toLowerCase();
@@ -518,7 +514,7 @@ export default function CompendiumDashboard() {
                               const wantInvestigation = name.includes('Investigation Overdue');
                               items = (nonConformanceData as any[]).filter(d => {
                                 if (teamFilter === 'production') {
-                                  if (!productionTeam.includes(d['Case Worker']) && !productionTeam.includes(d['Registered By'])) return false
+                                  if (!isInTeam(d['Case Worker'], productionTeam) && !isInTeam(d['Registered By'], productionTeam)) return false
                                 }
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'nc')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'nc')) return false
@@ -542,7 +538,7 @@ export default function CompendiumDashboard() {
                               // Mirror the hybrid bucketing in getOverdueSnapshot so
                               // the bar count and the drill-through list always agree.
                               items = (capaData as any[]).filter(d => {
-                                if (teamFilter === 'production' && !productionTeam.includes(d['Assigned To'])) return false
+                                if (teamFilter === 'production' && !isInTeam(d['Assigned To'], productionTeam)) return false
                                 const pendingSteps = (d['Pending Steps']?.trim() || '').toLowerCase()
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'capa')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'capa')) return false
@@ -562,7 +558,7 @@ export default function CompendiumDashboard() {
                               })
                             } else if (name.includes('CAPA') && name.includes('Eff')) {
                               items = (capaData as any[]).filter(d => {
-                                if (teamFilter === 'production' && !productionTeam.includes(d['Assigned To'])) return false
+                                if (teamFilter === 'production' && !isInTeam(d['Assigned To'], productionTeam)) return false
                                 const pendingSteps = (d['Pending Steps'] || '').trim()
                                 if (qaFilter === 'qa' && !isQaStep(pendingSteps, 'capa')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(pendingSteps, 'capa')) return false
@@ -582,14 +578,14 @@ export default function CompendiumDashboard() {
                               })
                             } else if (name.includes('Change')) {
                               items = (changeActionData as any[]).filter(d => {
-                                if (teamFilter === 'production' && !productionTeam.includes(d['Responsible'])) return false
+                                if (teamFilter === 'production' && !isInTeam(d['Responsible'], productionTeam)) return false
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'change-action')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'change-action')) return false
                                 return wasOpenAndOverdueValues(now, d['Deadline'], d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('Training')) {
                               items = (trainingData as any[]).filter(d => {
-                                if (teamFilter === 'production' && !productionTeam.includes(d['Trainee'])) return false
+                                if (teamFilter === 'production' && !isInTeam(d['Trainee'], productionTeam)) return false
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'training')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'training')) return false
                                 return wasOpenAndOverdueValues(now, d['Deadline for completing training'], d['Completed On'], d['Registration Time'])

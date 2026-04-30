@@ -13,7 +13,7 @@ import { DataTable, DataTableColumn } from './data-table';
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
-import { getProductionTeam } from '@/lib/teams';
+import { getProductionTeam, isInTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useData } from '@/contexts/data-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -81,7 +81,7 @@ export default function ChangeActionDashboard() {
       : allDataWithDates.filter(item => item['Pending Steps'] && item['Pending Steps'].trim() !== '');
 
     if (teamFilter === 'production') {
-        baseData = baseData.filter(item => productionTeam.includes(item['Responsible']));
+        baseData = baseData.filter(item => isInTeam(item['Responsible'], productionTeam));
     }
 
     if (pendingStepFilter !== 'all') {
@@ -127,7 +127,7 @@ export default function ChangeActionDashboard() {
 
     let trendData = allDataWithDates;
     if (teamFilter === 'production') {
-        trendData = trendData.filter(item => productionTeam.includes(item['Responsible']));
+        trendData = trendData.filter(item => isInTeam(item['Responsible'], productionTeam));
     }
 
     trendData.forEach(item => {

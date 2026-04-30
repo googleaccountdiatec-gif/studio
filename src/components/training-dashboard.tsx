@@ -12,7 +12,7 @@ import { Badge } from './ui/badge';
 import { FileUp, ListTodo, AlertTriangle, CheckCircle, ShieldCheck, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip as TooltipUI, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { getProductionTeam } from '@/lib/teams';
+import { getProductionTeam, isInTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
 import { DrillDownSheet, SummaryBar, ExpandableDataTable, DetailSection } from '@/components/drill-down';
@@ -92,7 +92,7 @@ export default function TrainingDashboard() {
   const allProcessedData = useMemo(() => {
     let data = trainingData.map((row: any) => parseTrainingData(row));
     if (teamFilter === 'production') {
-        data = data.filter(item => productionTeam.includes(item.trainee));
+        data = data.filter(item => isInTeam(item.trainee, productionTeam));
     }
     return data;
   }, [trainingData, teamFilter, productionTeam]);
@@ -134,7 +134,7 @@ export default function TrainingDashboard() {
 
       let trendData = trainingData.map((row: any) => parseTrainingData(row));
       if (teamFilter === 'production') {
-          trendData = trendData.filter(item => productionTeam.includes(item.trainee));
+          trendData = trendData.filter(item => isInTeam(item.trainee, productionTeam));
       }
 
       trendData.forEach(item => {

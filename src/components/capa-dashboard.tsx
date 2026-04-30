@@ -23,7 +23,7 @@ import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
-import { getProductionTeam } from '@/lib/teams';
+import { getProductionTeam, isInTeam } from '@/lib/teams';
 import { useData } from '@/contexts/data-context';
 import { DrillDownSheet, SummaryBar, InsightPanel, InsightCard, ExpandableDataTable, DetailSection, CrossLinkBadge } from '@/components/drill-down';
 import type { ExpandableColumn } from '@/components/drill-down';
@@ -70,7 +70,7 @@ export default function CapaDashboard() {
     }
 
     if (teamFilter === 'production') {
-      baseData = baseData.filter(item => productionTeam.includes(item['Assigned To']));
+      baseData = baseData.filter(item => isInTeam(item['Assigned To'], productionTeam));
     }
 
     return baseData.map(item => {
@@ -127,7 +127,7 @@ export default function CapaDashboard() {
 
     let trendData = capaData;
     if (teamFilter === 'production') {
-        trendData = trendData.filter(item => productionTeam.includes(item['Assigned To']));
+        trendData = trendData.filter(item => isInTeam(item['Assigned To'], productionTeam));
     }
 
     trendData.forEach(item => {

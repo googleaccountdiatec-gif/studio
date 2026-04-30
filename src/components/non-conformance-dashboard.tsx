@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useData } from '@/contexts/data-context';
-import { getProductionTeam } from '@/lib/teams';
+import { getProductionTeam, isInTeam } from '@/lib/teams';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { DrillDownSheet, SummaryBar, InsightPanel, InsightCard, ExpandableDataTable, DetailSection } from '@/components/drill-down';
@@ -276,8 +276,8 @@ export default function NonConformanceDashboard() {
 
     if (teamFilter === 'production') {
         data = data.filter(item =>
-            productionTeam.includes(item["Case Worker"]) ||
-            productionTeam.includes(item["Registered By"])
+            isInTeam(item["Case Worker"], productionTeam) ||
+            isInTeam(item["Registered By"], productionTeam)
         );
     }
 
