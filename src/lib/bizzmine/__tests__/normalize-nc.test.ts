@@ -240,6 +240,19 @@ describe('normalizeNcRecord — Effective Deadline', () => {
     const r = normalizeNcRecord(raw, ncStepMap);
     expect(r['Effective Deadline']).toBe('');
   });
+
+  it('Investigation Deadline retains raw value even for closed records', () => {
+    const closed: RawInstance = {
+      ...sampleNc,
+      NC_PendingSteps: '',
+      NC_DeadlineInvestigation: '5/1/2025 12:00:00 AM +00:00',
+      NC_CompletedOn: '2/28/2022 11:35:00 AM +00:00',
+    };
+    const r = normalizeNcRecord(closed, ncStepMap);
+    expect(r['Phase']).toBe('closed');
+    expect(r['Effective Deadline']).toBe('');
+    expect(r['Investigation Deadline']).toBe('2025-05-01T00:00:00.000Z');
+  });
 });
 
 describe('normalizeNcInstances', () => {

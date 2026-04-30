@@ -10,8 +10,11 @@ import { get, set, del } from 'idb-keyval';
  *   2 — NC Status field changed from numeric code ('1','3') to friendly text
  *       ('Open','Closed','Deadline Exceeded'). Old caches would render wrong
  *       Status badges, so wipe and re-sync.
+ *   3 — NC normalizer now exposes 'Investigation Deadline' (always populated)
+ *       so historical lookback can count closed-since-refDate records. Older
+ *       caches lack this field; wipe so the next sync writes the new shape.
  */
-export const CACHE_SCHEMA_VERSION = 2;
+export const CACHE_SCHEMA_VERSION = 3;
 
 const CACHE_KEY = 'bizzmine.cachedSync';
 

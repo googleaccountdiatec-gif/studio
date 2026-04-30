@@ -72,10 +72,16 @@ export interface NormalizedNc {
   'Phase': NcPhase;
   /**
    * Pre-computed deadline: DeadlineInvestigation when not closed, otherwise empty.
-   * Used for the "Investigation Overdue" metric — records past their original
-   * investigation deadline regardless of current phase.
+   * Used by the dashboard's CURRENT investigation-overdue check (closed records
+   * shouldn't show as currently overdue).
    */
   'Effective Deadline': string;
+  /**
+   * Original investigation deadline, ALWAYS populated when the raw value exists
+   * (no phase blanking). Used by the time-travel lookback so closed-since-refDate
+   * records can still be counted as "investigation overdue at refDate".
+   */
+  'Investigation Deadline': string;
   /**
    * BizzMine's auto-computed earliest pending deadline for the record's CURRENT
    * step. Distinct from Effective Deadline: BizzMine uses this for its
@@ -168,6 +174,7 @@ export function normalizeNcRecord(raw: RawInstance, stepMap?: StepMap): Normaliz
     'Repeated operation/analysis': typeof raw.NC_Repeatedoperation === 'string' ? raw.NC_Repeatedoperation : '',
     'Phase': phase,
     'Effective Deadline': effective,
+    'Investigation Deadline': deadlineInvestigation,
     'Earliest Due Date': earliestDueDateIso,
     _subCollections: subs,
   };

@@ -1,20 +1,18 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
-import { isValid, startOfDay, isAfter, getQuarter, subWeeks, isBefore, endOfDay, format, differenceInDays, getISOWeek } from 'date-fns';
+import { isValid, getQuarter, subWeeks, format } from 'date-fns';
 import { parseDate } from '@/lib/date-utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts';
 import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
-import { ArrowUp, ArrowDown, Minus, Save, History } from 'lucide-react';
+import { ArrowUp, ArrowDown, Minus, History } from 'lucide-react';
 import { TOOLTIP_STYLE } from '@/lib/chart-utils';
 import type { DocumentsInFlowMetrics } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
 import { DrillDownSheet, SummaryBar, ExpandableDataTable } from '@/components/drill-down';
 import { Badge } from '@/components/ui/badge';
 import { exportToCsv } from '@/lib/csv-export';
@@ -22,57 +20,22 @@ import { isQaStep } from '@/lib/qa-steps';
 import { wasOpenAndOverdueValues } from '@/lib/time-travel/overdue-at';
 import { Input } from '@/components/ui/input';
 
-// --- Helper Functions ---
-
-const formatSnapshotLabel = (timestamp: any): string => {
-  const date = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
-  if (!isValid(date)) return 'Saved Data';
-  const week = getISOWeek(date);
-  return `Wk ${week} — ${format(date, 'dd.MM.yy')}`;
-};
-
 export default function CompendiumDashboard() {
-  const { capaData, changeActionData, nonConformanceData, trainingData, documentKpiData, snapshots, saveSnapshot } = useData();
+  const { capaData, changeActionData, nonConformanceData, trainingData, documentKpiData } = useData();
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
+  // Comparison-period selector. Default = 14-day lookback. The selector value
+  // ID is still called "snapshot" for legacy reasons; all comparisons now go
+  // through the registration-gated lookback engine.
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('auto-2-weeks');
   // Custom date for the "Custom Date..." comparison option (default to 2 weeks ago).
   const [customDate, setCustomDate] = useState<string>(() => format(subWeeks(new Date(), 2), 'yyyy-MM-dd'));
-  const [isSaving, setIsSaving] = useState(false);
   const [drillThroughData, setDrillThroughData] = useState<{ title: string; items: any[]; category: string } | null>(null);
   const [caDrillChangeId, setCaDrillChangeId] = useState<string | null>(null);
   const [ncDrillData, setNcDrillData] = useState<{ title: string; items: any[]; filterType: 'all' | 'low' | 'high' | 'reoccurring' } | null>(null);
   const [docFlowDrillData, setDocFlowDrillData] = useState<{ title: string; items: any[] } | null>(null);
   const [ncYearRange, setNcYearRange] = useState<string>('current-prev');
   const [qaFilter, setQaFilter] = useState<'all' | 'qa' | 'non-qa'>('all');
-  const { toast } = useToast();
   const productionTeam = getProductionTeam();
-
-  // Auto-select the snapshot closest to 2 weeks ago (by ISO week number)
-  useEffect(() => {
-    if (snapshots.length === 0) return;
-    const targetWeek = getISOWeek(subWeeks(new Date(), 2));
-    const targetYear = subWeeks(new Date(), 2).getFullYear();
-
-    let bestSnap: typeof snapshots[0] | null = null;
-    let bestDiff = Infinity;
-
-    for (const snap of snapshots) {
-      const date = snap.timestamp?.toDate ? snap.timestamp.toDate() : new Date(snap.timestamp);
-      if (!isValid(date)) continue;
-      const snapWeek = getISOWeek(date);
-      const snapYear = date.getFullYear();
-      // Compare by week distance, weighting year difference by 52
-      const diff = Math.abs((snapYear - targetYear) * 52 + (snapWeek - targetWeek));
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestSnap = snap;
-      }
-    }
-
-    if (bestSnap?.id) {
-      setSelectedSnapshotId(bestSnap.id);
-    }
-  }, [snapshots]);
 
   // --- Non-Conformance Chart Logic ---
   const ncAvailableYears = useMemo(() => {
@@ -242,9 +205,13 @@ export default function CompendiumDashboard() {
           ncDeadlineExceeded++;
         }
 
-        // 2. Investigation Overdue: past investigation deadline regardless of phase
+        // 2. Investigation Overdue: past investigation deadline regardless of phase.
+        //    Prefer 'Investigation Deadline' (always populated by the normalizer)
+        //    over 'Effective Deadline' (blanked for closed records). Without this,
+        //    closed-since-refDate NCs would be invisible to the historical lookback.
         const investigationDeadlineStr =
-          item['Effective Deadline']
+          item['Investigation Deadline']
+          || item['Effective Deadline']
           || item['Deadline for completing investigation']
           || item['NC_DeadlineInvestigation'];
         if (wasOpenAndOverdueValues(referenceDate, investigationDeadlineStr, item['Completed On'], item['Registration Time'])) {
@@ -253,9 +220,6 @@ export default function CompendiumDashboard() {
     });
 
     return {
-      // Old saved snapshots only have the flat `nonConformance` field; keep it as
-      // the union of the two new metrics for legacy delta computations.
-      nonConformance: ncDeadlineExceeded,
       ncDeadlineExceeded,
       ncInvestigationOverdue,
       capaExecution,
@@ -308,126 +272,90 @@ export default function CompendiumDashboard() {
     ];
   }, [currentMetrics]);
 
-  // --- Helper: find closest snapshot to a target date ---
-  const findClosestSnapshot = (targetDate: Date) => {
-    if (snapshots.length === 0) return null;
-    let best: typeof snapshots[0] | null = null;
-    let bestDiff = Infinity;
-    for (const snap of snapshots) {
-      const date = snap.timestamp?.toDate ? snap.timestamp.toDate() : new Date(snap.timestamp);
-      if (!isValid(date)) continue;
-      const diff = Math.abs(differenceInDays(date, targetDate));
-      if (diff < bestDiff) { bestDiff = diff; best = snap; }
-    }
-    return best;
+  // --- Documents-in-Flow lookback ---
+  // Replaces the saved-snapshot read for past docFlow comparison. Approximates
+  // "doc was in flow at refDate" as: existed at refDate AND (was completed
+  // after refDate OR currently has pending steps). Misses docs that briefly
+  // had pending steps then went to a stable empty-pending state without a
+  // completion date — that's rare in practice.
+  const getDocumentsInFlowAtRefDate = (refDate: Date): DocumentsInFlowMetrics => {
+    const docs = documentKpiData.filter(doc => {
+        if (teamFilter === 'production' && !productionTeam.includes(doc['Responsible'])) return false;
+
+        const reg = parseDate(doc['Registration Time']);
+        if (isValid(reg) && reg.getTime() > refDate.getTime()) return false;
+
+        const co = parseDate(doc['Completed On']);
+        if (isValid(co) && co.getTime() <= refDate.getTime()) return false;
+
+        const wasOpenThen = isValid(co) && co.getTime() > refDate.getTime();
+        const hasPendingNow = doc['Pending Steps'] && doc['Pending Steps'].trim() !== '';
+        return wasOpenThen || hasPendingNow;
+    });
+
+    let majorRevisions = 0, minorRevisions = 0, newDocuments = 0;
+    docs.forEach(doc => {
+      const flow = (doc['Document Flow'] || '').toLowerCase();
+      if (flow.includes('major')) majorRevisions++;
+      else if (flow.includes('minor')) minorRevisions++;
+      else if (flow.includes('create') || flow.includes('new')) newDocuments++;
+    });
+    return { total: docs.length, majorRevisions, minorRevisions, newDocuments };
   };
 
   // --- Bi-Weekly Changes Logic ---
-  // Source-of-truth for `pastCounts`:
-  //   * `auto-*` and `custom` modes: registration-gated lookback computed from
-  //     the current dataset (src/lib/time-travel/overdue-at.ts). Snapshots are
-  //     only consulted for the document-flow metric, since we don't yet have
-  //     historical document counts in the lookback engine.
-  //   * Saved-snapshot mode: the persisted Firestore record is authoritative.
-  // Both are kept available so the user can compare lookback against historical
-  // snapshots before we retire the snapshot writer.
-  const { comparisonData, comparisonLabel, docFlowDeltas, comparisonSource } = useMemo(() => {
-    let pastCounts: any;
-    let label = "since last bi-weekly";
-    let source: 'lookback' | 'snapshot' = 'lookback';
+  // All comparison dates use registration-gated lookback against the current
+  // dataset (src/lib/time-travel/overdue-at.ts). The saved-snapshot Firestore
+  // path was retired once the user confirmed lookback parity.
+  const { comparisonData, comparisonLabel, docFlowDeltas } = useMemo(() => {
     let comparisonDate: Date;
-    let pastDocFlow: DocumentsInFlowMetrics | undefined;
-
-    const useLookbackForDate = (date: Date, lbl: string) => {
-      comparisonDate = date;
-      pastCounts = getOverdueSnapshot(date);
-      label = lbl;
-      const closestSnap = findClosestSnapshot(date);
-      if (closestSnap?.metrics.documentsInFlow) {
-        pastDocFlow = closestSnap.metrics.documentsInFlow;
-      }
-    };
+    let label: string;
 
     if (selectedSnapshotId === 'auto-1-week') {
-        useLookbackForDate(subWeeks(new Date(), 1), 'since last week');
-    } else if (selectedSnapshotId === 'auto-2-weeks') {
-        useLookbackForDate(subWeeks(new Date(), 2), 'since last bi-weekly');
+        comparisonDate = subWeeks(new Date(), 1);
+        label = 'since last week';
     } else if (selectedSnapshotId === 'auto-3-weeks') {
-        useLookbackForDate(subWeeks(new Date(), 3), 'since 3 weeks ago');
+        comparisonDate = subWeeks(new Date(), 3);
+        label = 'since 3 weeks ago';
     } else if (selectedSnapshotId === 'auto-4-weeks') {
-        useLookbackForDate(subWeeks(new Date(), 4), 'since 4 weeks ago');
+        comparisonDate = subWeeks(new Date(), 4);
+        label = 'since 4 weeks ago';
     } else if (selectedSnapshotId === 'custom') {
         const parsed = parseDate(customDate);
         if (isValid(parsed)) {
-            useLookbackForDate(parsed, `since ${format(parsed, 'dd.MM.yy')}`);
+            comparisonDate = parsed;
+            label = `since ${format(parsed, 'dd.MM.yy')}`;
         } else {
-            // Fall back to bi-weekly if customDate is unparseable
-            useLookbackForDate(subWeeks(new Date(), 2), 'since last bi-weekly');
+            comparisonDate = subWeeks(new Date(), 2);
+            label = 'since last bi-weekly';
         }
     } else {
-        const snap = snapshots.find(s => s.id === selectedSnapshotId);
-        if (snap) {
-            source = 'snapshot';
-            pastCounts = snap.metrics;
-            pastDocFlow = snap.metrics.documentsInFlow;
-            comparisonDate = snap.timestamp?.toDate ? snap.timestamp.toDate() : new Date(snap.timestamp);
-            const daysDiff = differenceInDays(new Date(), comparisonDate);
-
-            if (daysDiff === 7) label = "since last week";
-            else if (daysDiff === 14) label = "since last bi-weekly";
-            else label = `since Wk ${getISOWeek(comparisonDate)} — ${format(comparisonDate, 'dd.MM.yy')}`;
-        } else {
-            useLookbackForDate(subWeeks(new Date(), 2), 'since last bi-weekly');
-        }
+        // 'auto-2-weeks' (default) and any unknown id
+        comparisonDate = subWeeks(new Date(), 2);
+        label = 'since last bi-weekly';
     }
 
-    // Legacy Firestore snapshots had a single `nonConformance` field. That
-    // count was computed against the investigation deadline (the only NC
-    // overdue metric in the legacy code), so map it forward to
-    // ncInvestigationOverdue, NOT ncDeadlineExceeded.
-    //
-    // ncDeadlineExceeded was added with the API integration — legacy snapshots
-    // don't have it. Use null to mark "no comparable historical value" so the
-    // UI can render n/a instead of a misleading delta against zero.
-    const pastNcInvestigation = pastCounts.ncInvestigationOverdue ?? pastCounts.nonConformance ?? 0;
-    const pastNcDeadline = pastCounts.ncDeadlineExceeded ?? null;
-    const deltas: Array<{ label: string; delta: number | null; fill: string }> = [
-        { label: 'NC: Deadline Exceeded', delta: pastNcDeadline === null ? null : currentMetrics.ncDeadlineExceeded - pastNcDeadline, fill: 'hsl(var(--chart-2))' },
-        { label: 'NC: Investigation Overdue', delta: currentMetrics.ncInvestigationOverdue - pastNcInvestigation, fill: 'hsl(35 90% 55%)' },
+    const pastCounts = getOverdueSnapshot(comparisonDate);
+    const pastDocFlow = getDocumentsInFlowAtRefDate(comparisonDate);
+
+    const deltas = [
+        { label: 'NC: Deadline Exceeded', delta: currentMetrics.ncDeadlineExceeded - pastCounts.ncDeadlineExceeded, fill: 'hsl(var(--chart-2))' },
+        { label: 'NC: Investigation Overdue', delta: currentMetrics.ncInvestigationOverdue - pastCounts.ncInvestigationOverdue, fill: 'hsl(35 90% 55%)' },
         { label: 'CAPA (Exec)', delta: currentMetrics.capaExecution - pastCounts.capaExecution, fill: 'hsl(var(--chart-1))' },
         { label: 'CAPA (Eff)', delta: currentMetrics.capaEffectiveness - pastCounts.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
         { label: 'Change Actions', delta: currentMetrics.changeActions - pastCounts.changeActions, fill: 'hsl(var(--primary))' },
         { label: 'Training', delta: currentMetrics.training - pastCounts.training, fill: 'hsl(var(--chart-4))' },
     ];
 
-    const docDeltas = pastDocFlow ? {
+    const docDeltas = {
         total: currentMetrics.documentsInFlow.total - pastDocFlow.total,
         majorRevisions: currentMetrics.documentsInFlow.majorRevisions - pastDocFlow.majorRevisions,
         minorRevisions: currentMetrics.documentsInFlow.minorRevisions - pastDocFlow.minorRevisions,
         newDocuments: currentMetrics.documentsInFlow.newDocuments - pastDocFlow.newDocuments,
-    } : null;
+    };
 
-    return { comparisonData: deltas, comparisonLabel: label, docFlowDeltas: docDeltas, comparisonSource: source };
-  }, [selectedSnapshotId, customDate, snapshots, currentMetrics, capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam, qaFilter]);
-
-  const handleSaveSnapshot = async () => {
-    setIsSaving(true);
-    try {
-        await saveSnapshot(currentMetrics);
-        toast({
-            title: "Snapshot Saved",
-            description: "Current metrics have been saved to the database.",
-        });
-    } catch (error) {
-        toast({
-            title: "Error",
-            description: "Failed to save snapshot.",
-            variant: "destructive",
-        });
-    } finally {
-        setIsSaving(false);
-    }
-  };
+    return { comparisonData: deltas, comparisonLabel: label, docFlowDeltas: docDeltas };
+  }, [selectedSnapshotId, customDate, currentMetrics, capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam, qaFilter]);
 
   const documentsInFlowSummary = currentMetrics.documentsInFlow;
 
@@ -549,16 +477,6 @@ export default function CompendiumDashboard() {
               )}
             </div>
             <div className="flex items-center gap-4">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSaveSnapshot}
-                    disabled={isSaving}
-                    className="h-8 gap-2"
-                >
-                    <Save className="w-4 h-4" />
-                    {isSaving ? "Saving..." : "Save Snapshot"}
-                </Button>
                 <Select value={qaFilter} onValueChange={(v) => setQaFilter(v as any)}>
                   <SelectTrigger className="h-8 w-[140px]">
                     <SelectValue />
@@ -711,16 +629,6 @@ export default function CompendiumDashboard() {
                                 <SelectItem value="auto-3-weeks">Last 21 Days</SelectItem>
                                 <SelectItem value="auto-4-weeks">Last 28 Days</SelectItem>
                                 <SelectItem value="custom">Custom Date…</SelectItem>
-                                {snapshots.length > 0 && (
-                                    <div className="px-2 pt-2 pb-1 mt-1 border-t text-[10px] text-muted-foreground uppercase tracking-wider">
-                                        Saved Snapshots
-                                    </div>
-                                )}
-                                {snapshots.map((snap) => (
-                                    <SelectItem key={snap.id} value={snap.id!}>
-                                        {formatSnapshotLabel(snap.timestamp)}
-                                    </SelectItem>
-                                ))}
                             </SelectContent>
                         </Select>
                     </div>
@@ -733,12 +641,7 @@ export default function CompendiumDashboard() {
                             max={format(new Date(), 'yyyy-MM-dd')}
                         />
                     )}
-                    <p className="text-sm font-semibold capitalize">
-                      {comparisonLabel}
-                      <span className="ml-1 text-[10px] font-normal lowercase text-muted-foreground">
-                        · {comparisonSource}
-                      </span>
-                    </p>
+                    <p className="text-sm font-semibold capitalize">{comparisonLabel}</p>
                 </div>
 
                 {comparisonData.map((item) => (
@@ -746,18 +649,12 @@ export default function CompendiumDashboard() {
                         <span className="text-sm font-medium">{item.label}</span>
                         <div
                             className="flex items-center gap-1 font-bold"
-                            style={{ color: item.delta === null ? 'hsl(var(--muted-foreground))' : item.fill }}
+                            style={{ color: item.fill }}
                         >
-                            {item.delta === null ? (
-                                <span className="text-xs italic font-normal">n/a in snapshot</span>
-                            ) : (
-                                <>
-                                    {item.delta > 0 && <ArrowUp className="w-4 h-4" />}
-                                    {item.delta < 0 && <ArrowDown className="w-4 h-4" />}
-                                    {item.delta === 0 && <Minus className="w-4 h-4" />}
-                                    <span>{Math.abs(item.delta)}</span>
-                                </>
-                            )}
+                            {item.delta > 0 && <ArrowUp className="w-4 h-4" />}
+                            {item.delta < 0 && <ArrowDown className="w-4 h-4" />}
+                            {item.delta === 0 && <Minus className="w-4 h-4" />}
+                            <span>{Math.abs(item.delta)}</span>
                         </div>
                     </div>
                 ))}
@@ -821,9 +718,6 @@ export default function CompendiumDashboard() {
                 )}
             </div>
         </div>
-        {!docFlowDeltas && (
-          <p className="text-xs text-muted-foreground text-center mt-3">Save a snapshot and select it from the history dropdown to track changes.</p>
-        )}
       </GlassCard>
 
       <DrillDownSheet
