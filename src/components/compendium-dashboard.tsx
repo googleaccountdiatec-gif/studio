@@ -158,23 +158,49 @@ export default function CompendiumDashboard() {
     let ncInvestigationOverdue = 0;
 
     // CAPA
+    //
+    // Bucket+deadline routing has to handle a quirk of historical-replay: today's
+    // Phase reflects a record's CURRENT phase, but at a past refDate the same
+    // record may have been in a different (earlier) phase. We don't have phase
+    // history, so we use a hybrid heuristic:
+    //
+    //   * Currently OPEN records (Phase != 'closed'): trust today's Phase. They
+    //     haven't moved past their current phase, so this matches the historical
+    //     phase up to "they may have just been in an earlier phase at refDate".
+    //   * Currently CLOSED records: use whether `Deadline for effectiveness check`
+    //     is populated as the "did this record reach effectiveness phase before
+    //     closing" signal. That deadline is set when the record enters
+    //     effectiveness; if it's set, the record was almost certainly in
+    //     effectiveness phase at refDate (assuming refDate predates closure).
+    //
+    // This significantly tightens parity with the old saved-snapshot counts —
+    // the previous all-Phase routing put ~12 recently-closed CAPAs into the
+    // wrong bucket because Phase='closed' fell through to the exec branch.
     capaData.forEach(item => {
        if (teamFilter === 'production' && !productionTeam.includes(item['Assigned To'])) return;
        const pendingSteps = item['Pending Steps']?.trim() || "";
        if (qaFilter === 'qa' && !isQaStep(pendingSteps, 'capa')) return;
        if (qaFilter === 'non-qa' && isQaStep(pendingSteps, 'capa')) return;
 
-       // Prefer API's structured Phase; fall back to substring match for legacy data shape
        const phase = (item as any).Phase as string | undefined;
-       const isEffectiveness = phase
-         ? phase === 'effectiveness'
-         : pendingSteps.toLowerCase().includes('effectiveness');
+       const isClosed = phase === 'closed' || !!item['Completed On'];
 
-       const deadlineStr =
-         item['Effective Deadline']
-         || (isEffectiveness
-           ? (item['Deadline for effectiveness check'] || item['Due Date'])
-           : item['Due Date']);
+       let isEffectiveness: boolean;
+       let deadlineStr: any;
+       if (isClosed) {
+         const hasEffDl = !!item['Deadline for effectiveness check'];
+         isEffectiveness = hasEffDl;
+         deadlineStr = hasEffDl ? item['Deadline for effectiveness check'] : item['Due Date'];
+       } else {
+         isEffectiveness = phase
+           ? phase === 'effectiveness'
+           : pendingSteps.toLowerCase().includes('effectiveness');
+         deadlineStr =
+           item['Effective Deadline']
+           || (isEffectiveness
+             ? (item['Deadline for effectiveness check'] || item['Due Date'])
+             : item['Due Date']);
+       }
 
        if (wasOpenAndOverdueValues(referenceDate, deadlineStr, item['Completed On'], item['Registration Time'])) {
            if (isEffectiveness) capaEffectiveness++;
@@ -355,13 +381,18 @@ export default function CompendiumDashboard() {
         }
     }
 
-    // Old saved Firestore snapshots only have a flat `nonConformance` field.
-    // For new metrics fall back to 0 so deltas don't display NaN when
-    // comparing against legacy snapshots.
-    const pastNcDeadline = pastCounts.ncDeadlineExceeded ?? pastCounts.nonConformance ?? 0;
-    const pastNcInvestigation = pastCounts.ncInvestigationOverdue ?? 0;
-    const deltas = [
-        { label: 'NC: Deadline Exceeded', delta: currentMetrics.ncDeadlineExceeded - pastNcDeadline, fill: 'hsl(var(--chart-2))' },
+    // Legacy Firestore snapshots had a single `nonConformance` field. That
+    // count was computed against the investigation deadline (the only NC
+    // overdue metric in the legacy code), so map it forward to
+    // ncInvestigationOverdue, NOT ncDeadlineExceeded.
+    //
+    // ncDeadlineExceeded was added with the API integration — legacy snapshots
+    // don't have it. Use null to mark "no comparable historical value" so the
+    // UI can render n/a instead of a misleading delta against zero.
+    const pastNcInvestigation = pastCounts.ncInvestigationOverdue ?? pastCounts.nonConformance ?? 0;
+    const pastNcDeadline = pastCounts.ncDeadlineExceeded ?? null;
+    const deltas: Array<{ label: string; delta: number | null; fill: string }> = [
+        { label: 'NC: Deadline Exceeded', delta: pastNcDeadline === null ? null : currentMetrics.ncDeadlineExceeded - pastNcDeadline, fill: 'hsl(var(--chart-2))' },
         { label: 'NC: Investigation Overdue', delta: currentMetrics.ncInvestigationOverdue - pastNcInvestigation, fill: 'hsl(35 90% 55%)' },
         { label: 'CAPA (Exec)', delta: currentMetrics.capaExecution - pastCounts.capaExecution, fill: 'hsl(var(--chart-1))' },
         { label: 'CAPA (Eff)', delta: currentMetrics.capaEffectiveness - pastCounts.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
@@ -590,16 +621,26 @@ export default function CompendiumDashboard() {
                                     || wasOpenAndOverdueValues(now, investigationDeadlineStr, d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('CAPA') && name.includes('Exec')) {
+                              // Mirror the hybrid bucketing in getOverdueSnapshot so
+                              // the bar count and the drill-through list always agree.
                               items = (capaData as any[]).filter(d => {
                                 if (teamFilter === 'production' && !productionTeam.includes(d['Assigned To'])) return false
                                 const pendingSteps = (d['Pending Steps']?.trim() || '').toLowerCase()
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'capa')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'capa')) return false
-                                // Prefer API's structured Phase; fall back to substring match for legacy data
                                 const phase = d.Phase as string | undefined;
-                                const isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.includes('effectiveness');
+                                const isClosed = phase === 'closed' || !!d['Completed On'];
+                                let isEffectiveness: boolean, deadlineStr: any;
+                                if (isClosed) {
+                                  const hasEffDl = !!d['Deadline for effectiveness check'];
+                                  isEffectiveness = hasEffDl;
+                                  deadlineStr = hasEffDl ? d['Deadline for effectiveness check'] : d['Due Date'];
+                                } else {
+                                  isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.includes('effectiveness');
+                                  deadlineStr = d['Effective Deadline'] || (isEffectiveness ? (d['Deadline for effectiveness check'] || d['Due Date']) : d['Due Date']);
+                                }
                                 if (isEffectiveness) return false
-                                return wasOpenAndOverdueValues(now, d['Effective Deadline'] || d['Due Date'], d['Completed On'], d['Registration Time'])
+                                return wasOpenAndOverdueValues(now, deadlineStr, d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('CAPA') && name.includes('Eff')) {
                               items = (capaData as any[]).filter(d => {
@@ -607,11 +648,18 @@ export default function CompendiumDashboard() {
                                 const pendingSteps = (d['Pending Steps'] || '').trim()
                                 if (qaFilter === 'qa' && !isQaStep(pendingSteps, 'capa')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(pendingSteps, 'capa')) return false
-                                // Prefer API's structured Phase; fall back to substring match
                                 const phase = d.Phase as string | undefined;
-                                const isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.toLowerCase().includes('effectiveness');
+                                const isClosed = phase === 'closed' || !!d['Completed On'];
+                                let isEffectiveness: boolean, deadlineStr: any;
+                                if (isClosed) {
+                                  const hasEffDl = !!d['Deadline for effectiveness check'];
+                                  isEffectiveness = hasEffDl;
+                                  deadlineStr = hasEffDl ? d['Deadline for effectiveness check'] : d['Due Date'];
+                                } else {
+                                  isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.toLowerCase().includes('effectiveness');
+                                  deadlineStr = d['Effective Deadline'] || (isEffectiveness ? (d['Deadline for effectiveness check'] || d['Due Date']) : d['Due Date']);
+                                }
                                 if (!isEffectiveness) return false
-                                const deadlineStr = d['Effective Deadline'] || d['Deadline for effectiveness check'] || d['Due Date']
                                 return wasOpenAndOverdueValues(now, deadlineStr, d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('Change')) {
@@ -696,14 +744,20 @@ export default function CompendiumDashboard() {
                 {comparisonData.map((item) => (
                     <div key={item.label} className="flex items-center justify-between">
                         <span className="text-sm font-medium">{item.label}</span>
-                        <div 
+                        <div
                             className="flex items-center gap-1 font-bold"
-                            style={{ color: item.fill }}
+                            style={{ color: item.delta === null ? 'hsl(var(--muted-foreground))' : item.fill }}
                         >
-                            {item.delta > 0 && <ArrowUp className="w-4 h-4" />}
-                            {item.delta < 0 && <ArrowDown className="w-4 h-4" />}
-                            {item.delta === 0 && <Minus className="w-4 h-4" />}
-                            <span>{Math.abs(item.delta)}</span>
+                            {item.delta === null ? (
+                                <span className="text-xs italic font-normal">n/a in snapshot</span>
+                            ) : (
+                                <>
+                                    {item.delta > 0 && <ArrowUp className="w-4 h-4" />}
+                                    {item.delta < 0 && <ArrowDown className="w-4 h-4" />}
+                                    {item.delta === 0 && <Minus className="w-4 h-4" />}
+                                    <span>{Math.abs(item.delta)}</span>
+                                </>
+                            )}
                         </div>
                     </div>
                 ))}
