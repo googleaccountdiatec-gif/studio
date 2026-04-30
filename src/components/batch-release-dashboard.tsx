@@ -13,13 +13,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { FileUp, CalendarIcon, ListTodo, AlertTriangle, BarChart3 } from 'lucide-react';
+import { FileUp, CalendarIcon, ListTodo, AlertTriangle, BarChart3, GitBranch } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { CapaChart } from './capa-chart';
 import { cn } from '@/lib/utils';
 import { DrillDownSheet, SummaryBar, ExpandableDataTable } from '@/components/drill-down';
 import type { ExpandableColumn } from '@/components/drill-down';
 import { exportToCsv } from '@/lib/csv-export';
+import {
+  UnreleasedBatchesPanel,
+  useUnreleasedFinalBatchesCount,
+} from './unreleased-batches-panel';
 
 interface BatchReleaseData {
   'Batch number': string;
@@ -77,6 +81,10 @@ export default function BatchReleaseDashboard() {
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [navigationLevel, setNavigationLevel] = useState<'list' | 'detail'>('list');
+
+  // Unreleased Final Batches sheet (cross-collection: BR records not yet released)
+  const [unreleasedSheetOpen, setUnreleasedSheetOpen] = useState(false);
+  const unreleasedCount = useUnreleasedFinalBatchesCount();
 
   const processedData: ProcessedBatch[] = useMemo(() => {
     return batchReleaseData
@@ -409,6 +417,28 @@ export default function BatchReleaseDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Unreleased Final Batches — cross-collection drill-down into BR records */}
+      <GlassCard className="p-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <GitBranch className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+          <div className="flex-1 min-w-[200px]">
+            <p className="font-medium">
+              {unreleasedCount} downstream batch{unreleasedCount === 1 ? '' : 'es'} awaiting release
+            </p>
+            <p className="text-xs text-muted-foreground">
+              FPLC / Final Batch / Revialling records registered in BizzMine but not yet linked to a Batch Release.
+            </p>
+          </div>
+          <Button
+            variant={unreleasedCount > 0 ? 'default' : 'outline'}
+            onClick={() => setUnreleasedSheetOpen(true)}
+            disabled={unreleasedCount === 0}
+          >
+            See Unreleased Final Batches
+          </Button>
+        </div>
+      </GlassCard>
+
       {/* Filters */}
       <GlassCard className="p-4">
         <div className="grid gap-4 md:grid-cols-4 items-end">
@@ -812,6 +842,15 @@ export default function BatchReleaseDashboard() {
         ) : selectedBatchFromMonth ? (
           renderBatchDetail(selectedBatchFromMonth)
         ) : null}
+      </DrillDownSheet>
+
+      {/* Unreleased Final Batches Sheet — cross-collection BR view */}
+      <DrillDownSheet
+        open={unreleasedSheetOpen}
+        onOpenChange={setUnreleasedSheetOpen}
+        title="Unreleased Final Batches"
+      >
+        <UnreleasedBatchesPanel />
       </DrillDownSheet>
     </div>
   );

@@ -13,29 +13,29 @@ env:
   # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     value: "AIzaSyChCZy8ogBOifmNm5e4pA8Llisdcc63jzM"
-    availability: [BUILD, RUNTIME]
+    availability: [ BUILD, RUNTIME ]
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
     value: "studio-3950658647-53a8e.firebaseapp.com"
-    availability: [BUILD, RUNTIME]
+    availability: [ BUILD, RUNTIME ]
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
     value: "studio-3950658647-53a8e"
-    availability: [BUILD, RUNTIME]
+    availability: [ BUILD, RUNTIME ]
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
     value: "studio-3950658647-53a8e.firebasestorage.app"
-    availability: [BUILD, RUNTIME]
+    availability: [ BUILD, RUNTIME ]
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
     value: "646504045808"
-    availability: [BUILD, RUNTIME]
+    availability: [ BUILD, RUNTIME ]
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     value: "1:646504045808:web:e476dfb12074287ee73635"
-    availability: [BUILD, RUNTIME]
+    availability: [ BUILD, RUNTIME ]
   # BizzMine API
   - variable: BIZZMINE_API_BASE
     value: "https://diatec-api.bizzmine.cloud"
-    availability: [RUNTIME]
+    availability: [ RUNTIME ]
   - variable: BIZZMINE_TENANT
     value: "diatec-live"
-    availability: [RUNTIME]
+    availability: [ RUNTIME ]
   - variable: BIZZMINE_TOKEN
     secret: bizzmine-token
-    availability: [RUNTIME]
+    availability: [ RUNTIME ]

@@ -1,92 +1,41 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useData } from '@/contexts/data-context';
 import { GlassCard } from '@/components/ui/glass-card';
-import { isValid, startOfDay, isAfter, getQuarter, subWeeks, isBefore, endOfDay, format, differenceInDays, getISOWeek } from 'date-fns';
+import { isValid, getQuarter, subWeeks, format } from 'date-fns';
 import { parseDate } from '@/lib/date-utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts';
 import { getProductionTeam } from '@/lib/teams';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
-import { ArrowUp, ArrowDown, Minus, Save, History } from 'lucide-react';
+import { ArrowUp, ArrowDown, Minus, History } from 'lucide-react';
 import { TOOLTIP_STYLE } from '@/lib/chart-utils';
 import type { DocumentsInFlowMetrics } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
 import { DrillDownSheet, SummaryBar, ExpandableDataTable } from '@/components/drill-down';
 import { Badge } from '@/components/ui/badge';
 import { exportToCsv } from '@/lib/csv-export';
 import { isQaStep } from '@/lib/qa-steps';
-
-// --- Helper Functions ---
-
-
-/**
- * Determines if an item was overdue relative to a specific reference date.
- */
-const formatSnapshotLabel = (timestamp: any): string => {
-  const date = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
-  if (!isValid(date)) return 'Saved Data';
-  const week = getISOWeek(date);
-  return `Wk ${week} — ${format(date, 'dd.MM.yy')}`;
-};
-
-const isTaskOverdue = (deadlineStr: any, completedDateStr: any, referenceDate: Date): boolean => {
-    const deadline = parseDate(deadlineStr);
-    if (!isValid(deadline)) return false;
-    if (!isBefore(deadline, referenceDate)) return false;
-
-    const completedAt = parseDate(completedDateStr);
-    if (isValid(completedAt)) {
-        if (isBefore(completedAt, referenceDate) || completedAt.getTime() === referenceDate.getTime()) {
-            return false;
-        }
-    }
-    return true;
-};
+import { wasOpenAndOverdueValues } from '@/lib/time-travel/overdue-at';
+import { Input } from '@/components/ui/input';
 
 export default function CompendiumDashboard() {
-  const { capaData, changeActionData, nonConformanceData, trainingData, documentKpiData, snapshots, saveSnapshot } = useData();
+  const { capaData, changeActionData, nonConformanceData, trainingData, documentKpiData } = useData();
   const [teamFilter, setTeamFilter] = useState<'all' | 'production'>('all');
+  // Comparison-period selector. Default = 14-day lookback. The selector value
+  // ID is still called "snapshot" for legacy reasons; all comparisons now go
+  // through the registration-gated lookback engine.
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('auto-2-weeks');
-  const [isSaving, setIsSaving] = useState(false);
+  // Custom date for the "Custom Date..." comparison option (default to 2 weeks ago).
+  const [customDate, setCustomDate] = useState<string>(() => format(subWeeks(new Date(), 2), 'yyyy-MM-dd'));
   const [drillThroughData, setDrillThroughData] = useState<{ title: string; items: any[]; category: string } | null>(null);
   const [caDrillChangeId, setCaDrillChangeId] = useState<string | null>(null);
   const [ncDrillData, setNcDrillData] = useState<{ title: string; items: any[]; filterType: 'all' | 'low' | 'high' | 'reoccurring' } | null>(null);
   const [docFlowDrillData, setDocFlowDrillData] = useState<{ title: string; items: any[] } | null>(null);
   const [ncYearRange, setNcYearRange] = useState<string>('current-prev');
   const [qaFilter, setQaFilter] = useState<'all' | 'qa' | 'non-qa'>('all');
-  const { toast } = useToast();
   const productionTeam = getProductionTeam();
-
-  // Auto-select the snapshot closest to 2 weeks ago (by ISO week number)
-  useEffect(() => {
-    if (snapshots.length === 0) return;
-    const targetWeek = getISOWeek(subWeeks(new Date(), 2));
-    const targetYear = subWeeks(new Date(), 2).getFullYear();
-
-    let bestSnap: typeof snapshots[0] | null = null;
-    let bestDiff = Infinity;
-
-    for (const snap of snapshots) {
-      const date = snap.timestamp?.toDate ? snap.timestamp.toDate() : new Date(snap.timestamp);
-      if (!isValid(date)) continue;
-      const snapWeek = getISOWeek(date);
-      const snapYear = date.getFullYear();
-      // Compare by week distance, weighting year difference by 52
-      const diff = Math.abs((snapYear - targetYear) * 52 + (snapWeek - targetWeek));
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestSnap = snap;
-      }
-    }
-
-    if (bestSnap?.id) {
-      setSelectedSnapshotId(bestSnap.id);
-    }
-  }, [snapshots]);
 
   // --- Non-Conformance Chart Logic ---
   const ncAvailableYears = useMemo(() => {
@@ -172,25 +121,51 @@ export default function CompendiumDashboard() {
     let ncInvestigationOverdue = 0;
 
     // CAPA
+    //
+    // Bucket+deadline routing has to handle a quirk of historical-replay: today's
+    // Phase reflects a record's CURRENT phase, but at a past refDate the same
+    // record may have been in a different (earlier) phase. We don't have phase
+    // history, so we use a hybrid heuristic:
+    //
+    //   * Currently OPEN records (Phase != 'closed'): trust today's Phase. They
+    //     haven't moved past their current phase, so this matches the historical
+    //     phase up to "they may have just been in an earlier phase at refDate".
+    //   * Currently CLOSED records: use whether `Deadline for effectiveness check`
+    //     is populated as the "did this record reach effectiveness phase before
+    //     closing" signal. That deadline is set when the record enters
+    //     effectiveness; if it's set, the record was almost certainly in
+    //     effectiveness phase at refDate (assuming refDate predates closure).
+    //
+    // This significantly tightens parity with the old saved-snapshot counts —
+    // the previous all-Phase routing put ~12 recently-closed CAPAs into the
+    // wrong bucket because Phase='closed' fell through to the exec branch.
     capaData.forEach(item => {
        if (teamFilter === 'production' && !productionTeam.includes(item['Assigned To'])) return;
        const pendingSteps = item['Pending Steps']?.trim() || "";
        if (qaFilter === 'qa' && !isQaStep(pendingSteps, 'capa')) return;
        if (qaFilter === 'non-qa' && isQaStep(pendingSteps, 'capa')) return;
 
-       // Prefer API's structured Phase; fall back to substring match for legacy data shape
        const phase = (item as any).Phase as string | undefined;
-       const isEffectiveness = phase
-         ? phase === 'effectiveness'
-         : pendingSteps.toLowerCase().includes('effectiveness');
+       const isClosed = phase === 'closed' || !!item['Completed On'];
 
-       const deadlineStr =
-         item['Effective Deadline']
-         || (isEffectiveness
-           ? (item['Deadline for effectiveness check'] || item['Due Date'])
-           : item['Due Date']);
+       let isEffectiveness: boolean;
+       let deadlineStr: any;
+       if (isClosed) {
+         const hasEffDl = !!item['Deadline for effectiveness check'];
+         isEffectiveness = hasEffDl;
+         deadlineStr = hasEffDl ? item['Deadline for effectiveness check'] : item['Due Date'];
+       } else {
+         isEffectiveness = phase
+           ? phase === 'effectiveness'
+           : pendingSteps.toLowerCase().includes('effectiveness');
+         deadlineStr =
+           item['Effective Deadline']
+           || (isEffectiveness
+             ? (item['Deadline for effectiveness check'] || item['Due Date'])
+             : item['Due Date']);
+       }
 
-       if (isTaskOverdue(deadlineStr, item['Completed On'], referenceDate)) {
+       if (wasOpenAndOverdueValues(referenceDate, deadlineStr, item['Completed On'], item['Registration Time'])) {
            if (isEffectiveness) capaEffectiveness++;
            else capaExecution++;
        }
@@ -201,7 +176,7 @@ export default function CompendiumDashboard() {
         if (teamFilter === 'production' && !productionTeam.includes(item['Responsible'])) return;
         if (qaFilter === 'qa' && !isQaStep(item['Pending Steps'] || '', 'change-action')) return;
         if (qaFilter === 'non-qa' && isQaStep(item['Pending Steps'] || '', 'change-action')) return;
-        if (isTaskOverdue(item['Deadline'], item['Completed On'], referenceDate)) {
+        if (wasOpenAndOverdueValues(referenceDate, item['Deadline'], item['Completed On'], item['Registration Time'])) {
             changeActions++;
         }
     });
@@ -211,7 +186,7 @@ export default function CompendiumDashboard() {
         if (teamFilter === 'production' && !productionTeam.includes(item['Trainee'])) return;
         if (qaFilter === 'qa' && !isQaStep(item['Pending Steps'] || '', 'training')) return;
         if (qaFilter === 'non-qa' && isQaStep(item['Pending Steps'] || '', 'training')) return;
-        if (isTaskOverdue(item['Deadline for completing training'], item['Completed On'], referenceDate)) {
+        if (wasOpenAndOverdueValues(referenceDate, item['Deadline for completing training'], item['Completed On'], item['Registration Time'])) {
             training++;
         }
     });
@@ -226,24 +201,25 @@ export default function CompendiumDashboard() {
 
         // 1. Deadline Exceeded (BizzMine semantic): past NC_EarliestDueDate
         const earliestDueStr = item['Earliest Due Date'] || item['NC_EarliestDueDate'];
-        if (isTaskOverdue(earliestDueStr, item['Completed On'], referenceDate)) {
+        if (wasOpenAndOverdueValues(referenceDate, earliestDueStr, item['Completed On'], item['Registration Time'])) {
           ncDeadlineExceeded++;
         }
 
-        // 2. Investigation Overdue: past investigation deadline regardless of phase
+        // 2. Investigation Overdue: past investigation deadline regardless of phase.
+        //    Prefer 'Investigation Deadline' (always populated by the normalizer)
+        //    over 'Effective Deadline' (blanked for closed records). Without this,
+        //    closed-since-refDate NCs would be invisible to the historical lookback.
         const investigationDeadlineStr =
-          item['Effective Deadline']
+          item['Investigation Deadline']
+          || item['Effective Deadline']
           || item['Deadline for completing investigation']
           || item['NC_DeadlineInvestigation'];
-        if (isTaskOverdue(investigationDeadlineStr, item['Completed On'], referenceDate)) {
+        if (wasOpenAndOverdueValues(referenceDate, investigationDeadlineStr, item['Completed On'], item['Registration Time'])) {
           ncInvestigationOverdue++;
         }
     });
 
     return {
-      // Old saved snapshots only have the flat `nonConformance` field; keep it as
-      // the union of the two new metrics for legacy delta computations.
-      nonConformance: ncDeadlineExceeded,
       ncDeadlineExceeded,
       ncInvestigationOverdue,
       capaExecution,
@@ -296,102 +272,90 @@ export default function CompendiumDashboard() {
     ];
   }, [currentMetrics]);
 
-  // --- Helper: find closest snapshot to a target date ---
-  const findClosestSnapshot = (targetDate: Date) => {
-    if (snapshots.length === 0) return null;
-    let best: typeof snapshots[0] | null = null;
-    let bestDiff = Infinity;
-    for (const snap of snapshots) {
-      const date = snap.timestamp?.toDate ? snap.timestamp.toDate() : new Date(snap.timestamp);
-      if (!isValid(date)) continue;
-      const diff = Math.abs(differenceInDays(date, targetDate));
-      if (diff < bestDiff) { bestDiff = diff; best = snap; }
-    }
-    return best;
+  // --- Documents-in-Flow lookback ---
+  // Replaces the saved-snapshot read for past docFlow comparison. Approximates
+  // "doc was in flow at refDate" as: existed at refDate AND (was completed
+  // after refDate OR currently has pending steps). Misses docs that briefly
+  // had pending steps then went to a stable empty-pending state without a
+  // completion date — that's rare in practice.
+  const getDocumentsInFlowAtRefDate = (refDate: Date): DocumentsInFlowMetrics => {
+    const docs = documentKpiData.filter(doc => {
+        if (teamFilter === 'production' && !productionTeam.includes(doc['Responsible'])) return false;
+
+        const reg = parseDate(doc['Registration Time']);
+        if (isValid(reg) && reg.getTime() > refDate.getTime()) return false;
+
+        const co = parseDate(doc['Completed On']);
+        if (isValid(co) && co.getTime() <= refDate.getTime()) return false;
+
+        const wasOpenThen = isValid(co) && co.getTime() > refDate.getTime();
+        const hasPendingNow = doc['Pending Steps'] && doc['Pending Steps'].trim() !== '';
+        return wasOpenThen || hasPendingNow;
+    });
+
+    let majorRevisions = 0, minorRevisions = 0, newDocuments = 0;
+    docs.forEach(doc => {
+      const flow = (doc['Document Flow'] || '').toLowerCase();
+      if (flow.includes('major')) majorRevisions++;
+      else if (flow.includes('minor')) minorRevisions++;
+      else if (flow.includes('create') || flow.includes('new')) newDocuments++;
+    });
+    return { total: docs.length, majorRevisions, minorRevisions, newDocuments };
   };
 
   // --- Bi-Weekly Changes Logic ---
+  // All comparison dates use registration-gated lookback against the current
+  // dataset (src/lib/time-travel/overdue-at.ts). The saved-snapshot Firestore
+  // path was retired once the user confirmed lookback parity.
   const { comparisonData, comparisonLabel, docFlowDeltas } = useMemo(() => {
-    let pastCounts: any;
-    let label = "since last bi-weekly";
     let comparisonDate: Date;
-    let pastDocFlow: DocumentsInFlowMetrics | undefined;
+    let label: string;
 
-    if (selectedSnapshotId === 'auto-2-weeks') {
-        comparisonDate = subWeeks(new Date(), 2);
-        pastCounts = getOverdueSnapshot(comparisonDate);
-        // Use closest saved snapshot for document flow deltas
-        const closestSnap = findClosestSnapshot(comparisonDate);
-        if (closestSnap?.metrics.documentsInFlow) {
-            pastDocFlow = closestSnap.metrics.documentsInFlow;
-        }
-    } else if (selectedSnapshotId === 'auto-1-week') {
+    if (selectedSnapshotId === 'auto-1-week') {
         comparisonDate = subWeeks(new Date(), 1);
-        pastCounts = getOverdueSnapshot(comparisonDate);
-        label = "since last week";
-        const closestSnap = findClosestSnapshot(comparisonDate);
-        if (closestSnap?.metrics.documentsInFlow) {
-            pastDocFlow = closestSnap.metrics.documentsInFlow;
-        }
-    } else {
-        const snap = snapshots.find(s => s.id === selectedSnapshotId);
-        if (snap) {
-            pastCounts = snap.metrics;
-            pastDocFlow = snap.metrics.documentsInFlow;
-            comparisonDate = snap.timestamp?.toDate ? snap.timestamp.toDate() : new Date(snap.timestamp);
-            const daysDiff = differenceInDays(new Date(), comparisonDate);
-
-            if (daysDiff === 7) label = "since last week";
-            else if (daysDiff === 14) label = "since last bi-weekly";
-            else label = `since Wk ${getISOWeek(comparisonDate)} — ${format(comparisonDate, 'dd.MM.yy')}`;
+        label = 'since last week';
+    } else if (selectedSnapshotId === 'auto-3-weeks') {
+        comparisonDate = subWeeks(new Date(), 3);
+        label = 'since 3 weeks ago';
+    } else if (selectedSnapshotId === 'auto-4-weeks') {
+        comparisonDate = subWeeks(new Date(), 4);
+        label = 'since 4 weeks ago';
+    } else if (selectedSnapshotId === 'custom') {
+        const parsed = parseDate(customDate);
+        if (isValid(parsed)) {
+            comparisonDate = parsed;
+            label = `since ${format(parsed, 'dd.MM.yy')}`;
         } else {
             comparisonDate = subWeeks(new Date(), 2);
-            pastCounts = getOverdueSnapshot(comparisonDate);
+            label = 'since last bi-weekly';
         }
+    } else {
+        // 'auto-2-weeks' (default) and any unknown id
+        comparisonDate = subWeeks(new Date(), 2);
+        label = 'since last bi-weekly';
     }
 
-    // Old saved Firestore snapshots only have a flat `nonConformance` field.
-    // For new metrics fall back to 0 so deltas don't display NaN when
-    // comparing against legacy snapshots.
-    const pastNcDeadline = pastCounts.ncDeadlineExceeded ?? pastCounts.nonConformance ?? 0;
-    const pastNcInvestigation = pastCounts.ncInvestigationOverdue ?? 0;
+    const pastCounts = getOverdueSnapshot(comparisonDate);
+    const pastDocFlow = getDocumentsInFlowAtRefDate(comparisonDate);
+
     const deltas = [
-        { label: 'NC: Deadline Exceeded', delta: currentMetrics.ncDeadlineExceeded - pastNcDeadline, fill: 'hsl(var(--chart-2))' },
-        { label: 'NC: Investigation Overdue', delta: currentMetrics.ncInvestigationOverdue - pastNcInvestigation, fill: 'hsl(35 90% 55%)' },
+        { label: 'NC: Deadline Exceeded', delta: currentMetrics.ncDeadlineExceeded - pastCounts.ncDeadlineExceeded, fill: 'hsl(var(--chart-2))' },
+        { label: 'NC: Investigation Overdue', delta: currentMetrics.ncInvestigationOverdue - pastCounts.ncInvestigationOverdue, fill: 'hsl(35 90% 55%)' },
         { label: 'CAPA (Exec)', delta: currentMetrics.capaExecution - pastCounts.capaExecution, fill: 'hsl(var(--chart-1))' },
         { label: 'CAPA (Eff)', delta: currentMetrics.capaEffectiveness - pastCounts.capaEffectiveness, fill: 'hsl(var(--chart-3))' },
         { label: 'Change Actions', delta: currentMetrics.changeActions - pastCounts.changeActions, fill: 'hsl(var(--primary))' },
         { label: 'Training', delta: currentMetrics.training - pastCounts.training, fill: 'hsl(var(--chart-4))' },
     ];
 
-    const docDeltas = pastDocFlow ? {
+    const docDeltas = {
         total: currentMetrics.documentsInFlow.total - pastDocFlow.total,
         majorRevisions: currentMetrics.documentsInFlow.majorRevisions - pastDocFlow.majorRevisions,
         minorRevisions: currentMetrics.documentsInFlow.minorRevisions - pastDocFlow.minorRevisions,
         newDocuments: currentMetrics.documentsInFlow.newDocuments - pastDocFlow.newDocuments,
-    } : null;
+    };
 
     return { comparisonData: deltas, comparisonLabel: label, docFlowDeltas: docDeltas };
-  }, [selectedSnapshotId, snapshots, currentMetrics, capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam, qaFilter]);
-
-  const handleSaveSnapshot = async () => {
-    setIsSaving(true);
-    try {
-        await saveSnapshot(currentMetrics);
-        toast({
-            title: "Snapshot Saved",
-            description: "Current metrics have been saved to the database.",
-        });
-    } catch (error) {
-        toast({
-            title: "Error",
-            description: "Failed to save snapshot.",
-            variant: "destructive",
-        });
-    } finally {
-        setIsSaving(false);
-    }
-  };
+  }, [selectedSnapshotId, customDate, currentMetrics, capaData, changeActionData, trainingData, nonConformanceData, documentKpiData, teamFilter, productionTeam, qaFilter]);
 
   const documentsInFlowSummary = currentMetrics.documentsInFlow;
 
@@ -513,16 +477,6 @@ export default function CompendiumDashboard() {
               )}
             </div>
             <div className="flex items-center gap-4">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSaveSnapshot}
-                    disabled={isSaving}
-                    className="h-8 gap-2"
-                >
-                    <Save className="w-4 h-4" />
-                    {isSaving ? "Saving..." : "Save Snapshot"}
-                </Button>
                 <Select value={qaFilter} onValueChange={(v) => setQaFilter(v as any)}>
                   <SelectTrigger className="h-8 w-[140px]">
                     <SelectValue />
@@ -575,26 +529,36 @@ export default function CompendiumDashboard() {
                                   || d['NC_DeadlineInvestigation']
 
                                 if (wantDeadlineExceeded) {
-                                  return isTaskOverdue(earliestDueStr, d['Completed On'], now)
+                                  return wasOpenAndOverdueValues(now, earliestDueStr, d['Completed On'], d['Registration Time'])
                                 }
                                 if (wantInvestigation) {
-                                  return isTaskOverdue(investigationDeadlineStr, d['Completed On'], now)
+                                  return wasOpenAndOverdueValues(now, investigationDeadlineStr, d['Completed On'], d['Registration Time'])
                                 }
                                 // Legacy 'Non-Conformance' (no specific suffix) — show union of both
-                                return isTaskOverdue(earliestDueStr, d['Completed On'], now)
-                                    || isTaskOverdue(investigationDeadlineStr, d['Completed On'], now)
+                                return wasOpenAndOverdueValues(now, earliestDueStr, d['Completed On'], d['Registration Time'])
+                                    || wasOpenAndOverdueValues(now, investigationDeadlineStr, d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('CAPA') && name.includes('Exec')) {
+                              // Mirror the hybrid bucketing in getOverdueSnapshot so
+                              // the bar count and the drill-through list always agree.
                               items = (capaData as any[]).filter(d => {
                                 if (teamFilter === 'production' && !productionTeam.includes(d['Assigned To'])) return false
                                 const pendingSteps = (d['Pending Steps']?.trim() || '').toLowerCase()
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'capa')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'capa')) return false
-                                // Prefer API's structured Phase; fall back to substring match for legacy data
                                 const phase = d.Phase as string | undefined;
-                                const isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.includes('effectiveness');
+                                const isClosed = phase === 'closed' || !!d['Completed On'];
+                                let isEffectiveness: boolean, deadlineStr: any;
+                                if (isClosed) {
+                                  const hasEffDl = !!d['Deadline for effectiveness check'];
+                                  isEffectiveness = hasEffDl;
+                                  deadlineStr = hasEffDl ? d['Deadline for effectiveness check'] : d['Due Date'];
+                                } else {
+                                  isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.includes('effectiveness');
+                                  deadlineStr = d['Effective Deadline'] || (isEffectiveness ? (d['Deadline for effectiveness check'] || d['Due Date']) : d['Due Date']);
+                                }
                                 if (isEffectiveness) return false
-                                return isTaskOverdue(d['Effective Deadline'] || d['Due Date'], d['Completed On'], now)
+                                return wasOpenAndOverdueValues(now, deadlineStr, d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('CAPA') && name.includes('Eff')) {
                               items = (capaData as any[]).filter(d => {
@@ -602,26 +566,33 @@ export default function CompendiumDashboard() {
                                 const pendingSteps = (d['Pending Steps'] || '').trim()
                                 if (qaFilter === 'qa' && !isQaStep(pendingSteps, 'capa')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(pendingSteps, 'capa')) return false
-                                // Prefer API's structured Phase; fall back to substring match
                                 const phase = d.Phase as string | undefined;
-                                const isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.toLowerCase().includes('effectiveness');
+                                const isClosed = phase === 'closed' || !!d['Completed On'];
+                                let isEffectiveness: boolean, deadlineStr: any;
+                                if (isClosed) {
+                                  const hasEffDl = !!d['Deadline for effectiveness check'];
+                                  isEffectiveness = hasEffDl;
+                                  deadlineStr = hasEffDl ? d['Deadline for effectiveness check'] : d['Due Date'];
+                                } else {
+                                  isEffectiveness = phase ? phase === 'effectiveness' : pendingSteps.toLowerCase().includes('effectiveness');
+                                  deadlineStr = d['Effective Deadline'] || (isEffectiveness ? (d['Deadline for effectiveness check'] || d['Due Date']) : d['Due Date']);
+                                }
                                 if (!isEffectiveness) return false
-                                const deadlineStr = d['Effective Deadline'] || d['Deadline for effectiveness check'] || d['Due Date']
-                                return isTaskOverdue(deadlineStr, d['Completed On'], now)
+                                return wasOpenAndOverdueValues(now, deadlineStr, d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('Change')) {
                               items = (changeActionData as any[]).filter(d => {
                                 if (teamFilter === 'production' && !productionTeam.includes(d['Responsible'])) return false
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'change-action')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'change-action')) return false
-                                return isTaskOverdue(d['Deadline'], d['Completed On'], now)
+                                return wasOpenAndOverdueValues(now, d['Deadline'], d['Completed On'], d['Registration Time'])
                               })
                             } else if (name.includes('Training')) {
                               items = (trainingData as any[]).filter(d => {
                                 if (teamFilter === 'production' && !productionTeam.includes(d['Trainee'])) return false
                                 if (qaFilter === 'qa' && !isQaStep(d['Pending Steps'] || '', 'training')) return false
                                 if (qaFilter === 'non-qa' && isQaStep(d['Pending Steps'] || '', 'training')) return false
-                                return isTaskOverdue(d['Deadline for completing training'], d['Completed On'], now)
+                                return wasOpenAndOverdueValues(now, d['Deadline for completing training'], d['Completed On'], d['Registration Time'])
                               })
                             }
                             const category = (name.includes('NC:') || name.includes('Non-Conformance')) ? 'nc'
@@ -648,28 +619,35 @@ export default function CompendiumDashboard() {
                     <div className="flex items-center justify-between">
                         <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Change</h4>
                         <Select value={selectedSnapshotId} onValueChange={setSelectedSnapshotId}>
-                            <SelectTrigger className="h-6 w-[150px] text-[10px] bg-transparent border-none shadow-none focus:ring-0 px-0 justify-end gap-1">
+                            <SelectTrigger className="h-6 w-[170px] text-[10px] bg-transparent border-none shadow-none focus:ring-0 px-0 justify-end gap-1">
                                 <History className="w-3 h-3" />
                                 <SelectValue placeholder="Select period" />
                             </SelectTrigger>
                             <SelectContent align="end" className="text-xs">
-                                <SelectItem value="auto-1-week">Last 7 Days (Auto)</SelectItem>
-                                <SelectItem value="auto-2-weeks">Last 14 Days (Auto)</SelectItem>
-                                {snapshots.map((snap) => (
-                                    <SelectItem key={snap.id} value={snap.id!}>
-                                        {formatSnapshotLabel(snap.timestamp)}
-                                    </SelectItem>
-                                ))}
+                                <SelectItem value="auto-1-week">Last 7 Days</SelectItem>
+                                <SelectItem value="auto-2-weeks">Last 14 Days</SelectItem>
+                                <SelectItem value="auto-3-weeks">Last 21 Days</SelectItem>
+                                <SelectItem value="auto-4-weeks">Last 28 Days</SelectItem>
+                                <SelectItem value="custom">Custom Date…</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
+                    {selectedSnapshotId === 'custom' && (
+                        <Input
+                            type="date"
+                            value={customDate}
+                            onChange={(e) => setCustomDate(e.target.value)}
+                            className="h-7 text-xs"
+                            max={format(new Date(), 'yyyy-MM-dd')}
+                        />
+                    )}
                     <p className="text-sm font-semibold capitalize">{comparisonLabel}</p>
                 </div>
 
                 {comparisonData.map((item) => (
                     <div key={item.label} className="flex items-center justify-between">
                         <span className="text-sm font-medium">{item.label}</span>
-                        <div 
+                        <div
                             className="flex items-center gap-1 font-bold"
                             style={{ color: item.fill }}
                         >
@@ -740,9 +718,6 @@ export default function CompendiumDashboard() {
                 )}
             </div>
         </div>
-        {!docFlowDeltas && (
-          <p className="text-xs text-muted-foreground text-center mt-3">Save a snapshot and select it from the history dropdown to track changes.</p>
-        )}
       </GlassCard>
 
       <DrillDownSheet

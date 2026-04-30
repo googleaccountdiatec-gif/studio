@@ -1,7 +1,6 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { MetricSnapshot } from '@/lib/types';
 import { saveCache, loadCache, type CachedSync, CACHE_SCHEMA_VERSION } from '@/lib/bizzmine/cache';
 
 interface CapaData { [key: string]: any; }
@@ -9,6 +8,7 @@ interface ChangeActionData { [key: string]: any; }
 interface NonConformanceData { [key: string]: any; }
 interface TrainingData { [key: string]: any; }
 interface BatchReleaseData { [key: string]: any; }
+interface BatchRegistryData { [key: string]: any; }
 interface DocumentKpiData { [key: string]: any; }
 interface ChangeKpiData { [key: string]: any; }
 
@@ -48,18 +48,17 @@ interface DataContextType {
   nonConformanceData: NonConformanceData[];
   trainingData: TrainingData[];
   batchReleaseData: BatchReleaseData[];
+  batchRegistryData: BatchRegistryData[];
   documentKpiData: DocumentKpiData[];
   changeKpiData: ChangeKpiData[];
-  snapshots: MetricSnapshot[];
   setCapaData: React.Dispatch<React.SetStateAction<CapaData[]>>;
   setChangeActionData: React.Dispatch<React.SetStateAction<ChangeActionData[]>>;
   setNonConformanceData: React.Dispatch<React.SetStateAction<NonConformanceData[]>>;
   setTrainingData: React.Dispatch<React.SetStateAction<TrainingData[]>>;
   setBatchReleaseData: React.Dispatch<React.SetStateAction<BatchReleaseData[]>>;
+  setBatchRegistryData: React.Dispatch<React.SetStateAction<BatchRegistryData[]>>;
   setDocumentKpiData: React.Dispatch<React.SetStateAction<DocumentKpiData[]>>;
   setChangeKpiData: React.Dispatch<React.SetStateAction<ChangeKpiData[]>>;
-  saveSnapshot: (metrics: MetricSnapshot['metrics']) => Promise<void>;
-  refreshSnapshots: () => Promise<void>;
   // Sync from BizzMine
   lastSyncedAt: Date | null;
   syncStatus: SyncStatus;
@@ -78,39 +77,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [nonConformanceData, setNonConformanceData] = useState<NonConformanceData[]>([]);
   const [trainingData, setTrainingData] = useState<TrainingData[]>([]);
   const [batchReleaseData, setBatchReleaseData] = useState<BatchReleaseData[]>([]);
+  const [batchRegistryData, setBatchRegistryData] = useState<BatchRegistryData[]>([]);
   const [documentKpiData, setDocumentKpiData] = useState<DocumentKpiData[]>([]);
   const [changeKpiData, setChangeKpiData] = useState<ChangeKpiData[]>([]);
-  const [snapshots, setSnapshots] = useState<MetricSnapshot[]>([]);
 
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
   const [hasEverSynced, setHasEverSynced] = useState(false);
 
-  const fetchSnapshots = async () => {
-    try {
-      const { getDb } = await import('@/lib/firebase');
-      const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
-      const db = getDb();
-      const q = query(collection(db, 'biweekly_snapshots'), orderBy('timestamp', 'desc'), limit(10));
-      const querySnapshot = await getDocs(q);
-      const fetchedSnapshots: MetricSnapshot[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        fetchedSnapshots.push({
-          id: doc.id,
-          timestamp: data.timestamp,
-          metrics: data.metrics,
-        });
-      });
-      setSnapshots(fetchedSnapshots);
-    } catch (error) {
-      console.error("Error fetching snapshots:", error);
-    }
-  };
-
   useEffect(() => {
-    fetchSnapshots();
     // Restore lastSyncedAt from localStorage AND hydrate dashboard data
     // from IndexedDB cache so the dashboards render immediately on cold load.
     let cancelled = false;
@@ -128,9 +104,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         setChangeActionData(cached.collections.changeAction as any[]);
         setChangeKpiData(cached.collections.changes as any[]);
         setBatchReleaseData(cached.collections.batchRelease as any[]);
+        setBatchRegistryData(cached.collections.batchRegistry as any[]);
         setDocumentKpiData(cached.collections.documents as any[]);
         setTrainingData(cached.collections.training as any[]);
-        // batchRegistry has no dedicated state slot yet (Phase 4.2 introduces one)
       }
 
       // Prefer the cache's syncedAt over the localStorage timestamp — they
@@ -147,31 +123,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     })();
     return () => { cancelled = true; };
   }, []);
-
-  const saveSnapshot = async (metrics: MetricSnapshot['metrics']) => {
-    const timeoutMs = 15000;
-    try {
-      const { getDb } = await import('@/lib/firebase');
-      const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-      const db = getDb();
-      const savePromise = addDoc(collection(db, 'biweekly_snapshots'), {
-        timestamp: serverTimestamp(),
-        metrics
-      });
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(
-          `Firestore addDoc timed out after ${timeoutMs / 1000}s. ` +
-          `Check that your Firestore database exists and is named "(default)". ` +
-          `Project: ${db.app.options.projectId}`
-        )), timeoutMs)
-      );
-      await Promise.race([savePromise, timeoutPromise]);
-      await fetchSnapshots();
-    } catch (error) {
-      console.error("Error saving snapshot:", error);
-      throw error;
-    }
-  };
 
   const sync = useCallback(async () => {
     setSyncStatus('syncing');
@@ -224,6 +175,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             cachePayload.collections.batchRelease = c.records;
             break;
           case 'batchRegistry':
+            setBatchRegistryData(c.records);
             cachePayload.collections.batchRegistry = c.records;
             break;
           case 'documents':
@@ -264,18 +216,17 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       nonConformanceData,
       trainingData,
       batchReleaseData,
+      batchRegistryData,
       documentKpiData,
       changeKpiData,
-      snapshots,
       setCapaData,
       setChangeActionData,
       setNonConformanceData,
       setTrainingData,
       setBatchReleaseData,
+      setBatchRegistryData,
       setDocumentKpiData,
       setChangeKpiData,
-      saveSnapshot,
-      refreshSnapshots: fetchSnapshots,
       lastSyncedAt,
       syncStatus,
       syncError,
